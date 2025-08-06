@@ -1,0 +1,39 @@
+{
+  "scraper": {
+    "base_url": "https://stackoverflow.com",
+    "max_pages": 10,
+    "delay_between_requests": 5,
+    "headless": true,
+    "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    "timeout": 60,
+    "retry_count": 5
+  },
+  "database": {
+    "host": "localhost",
+    "port": 27017,
+    "name": "stackoverflow_data",
+    "collection": "questions",
+    "max_pool_size": 10,
+    "timeout_ms": 30000
+  },
+  "api": {
+    "key": "",
+    "rate_limit": 300,
+    "quota_max": 10000,
+    "site": "stackoverflow"
+  },
+  "analysis": {
+    "min_score_threshold": -5,
+    "max_score_threshold": 100,
+    "sentiment_threshold": 0.1,
+    "keyword_min_frequency": 5,
+    "trend_period_days": 30
+  },
+  "logging": {
+    "level": "INFO",
+    "format": "%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    "file": "logs/scraper.log",
+    "max_file_size": "10MB",
+    "backup_count": 5
+  }
+}
