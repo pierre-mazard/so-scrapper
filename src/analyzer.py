@@ -29,11 +29,6 @@ from nltk.stem import WordNetLemmatizer
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.cluster import KMeans
 from sklearn.decomposition import LatentDirichletAllocation
-import matplotlib.pyplot as plt
-import seaborn as sns
-import plotly.express as px
-import plotly.graph_objects as go
-from plotly.subplots import make_subplots
 
 from .database import DatabaseManager
 
@@ -230,7 +225,7 @@ class TrendAnalyzer:
         }
         
         for tag, dates in tag_timeline.items():
-            if len(dates) < 5:  # Ignorer les tags avec peu de données
+            if len(dates) < 1:  # Analyser tous les tags qui apparaissent au moins une fois
                 continue
             
             tag_trend = {'tag': tag, 'total_questions': len(dates)}
@@ -246,8 +241,11 @@ class TrendAnalyzer:
             
             if older_count > 0:
                 growth_rate = (recent_count - older_count) / older_count * 100
+            elif recent_count > 0:
+                # Si pas de données anciennes mais des récentes, afficher comme "nouveau" plutôt que 100%
+                growth_rate = 0  # Marquer comme nouveau tag plutôt que croissance infinie
             else:
-                growth_rate = 100 if recent_count > 0 else 0
+                growth_rate = 0
             
             tag_trend['growth_rate'] = growth_rate
             trends[tag] = tag_trend
@@ -353,6 +351,16 @@ class DataAnalyzer:
         self.logger = logging.getLogger(__name__)
         self.nlp_processor = NLPProcessor()
         self.trend_analyzer = TrendAnalyzer()
+        self.execution_metadata = {}
+    
+    def set_execution_metadata(self, scraping_info: Dict[str, Any]) -> None:
+        """
+        Configure les métadonnées d'exécution du scraping.
+        
+        Args:
+            scraping_info: Informations sur l'exécution du scraping
+        """
+        self.execution_metadata = scraping_info
     
     async def analyze_trends(self) -> Dict[str, Any]:
         """
@@ -377,6 +385,7 @@ class DataAnalyzer:
             
             # Analyses principales
             results = {
+                'execution_info': self.execution_metadata,
                 'analysis_metadata': {
                     'analysis_date': datetime.now().isoformat(),
                     'total_questions': len(questions),
@@ -620,246 +629,304 @@ class DataAnalyzer:
         
         self.logger.info(f"Résultats JSON sauvegardés dans {json_file}")
         
-        # Génération des rapports
-        await self._generate_reports(results, reports_dir, timestamp)
+        # Génération du rapport complet unique
+        await self._generate_complete_report(results, reports_dir, timestamp)
     
-    async def generate_visualizations(self, results: Dict[str, Any]) -> None:
+    
+    async def _generate_complete_report(self, results: Dict[str, Any], reports_dir, timestamp: str) -> None:
         """
-        Génère des visualisations des résultats d'analyse.
+        Génère un rapport complet incluant toutes les informations d'exécution et d'analyse.
         
         Args:
-            results: Résultats d'analyse
+            results: Résultats d'analyse complets
+            reports_dir: Répertoire de sauvegarde des rapports
+            timestamp: Timestamp pour nommer le fichier
         """
         try:
-            # Créer le dossier output/visualizations s'il n'existe pas
-            from pathlib import Path
-            output_dir = Path("output/visualizations")
-            output_dir.mkdir(parents=True, exist_ok=True)
+            # Rapport complet unique (format Markdown)
+            complete_file = reports_dir / f"rapport_complet_{timestamp}.md"
             
-            # Timestamp pour les fichiers
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            with open(complete_file, 'w', encoding='utf-8') as f:
+                # En-tête du rapport
+                f.write("# 📊 RAPPORT COMPLET - STACK OVERFLOW SCRAPER & ANALYZER\n\n")
+                f.write("*Rapport d'exécution complète du processus de scraping et d'analyse*\n\n")
+                f.write("---\n\n")
+                
+                # 1. INFORMATIONS D'EXÉCUTION GÉNÉRALE
+                self._write_execution_info(f, results)
+                
+                # 2. PHASE SCRAPING
+                self._write_scraping_info(f, results)
+                
+                # 3. PHASE STOCKAGE
+                self._write_storage_info(f, results)
+                
+                # 4. PHASE ANALYSE
+                self._write_analysis_info(f, results)
+                
+                # 5. RÉSULTATS D'ANALYSE DÉTAILLÉS
+                self._write_detailed_analysis_results(f, results)
+                
+                # 6. PERFORMANCE ET STATISTIQUES
+                self._write_performance_stats(f, results)
+                
+                # 7. FOOTER
+                f.write("\n---\n")
+                f.write(f"**Rapport généré le {datetime.now().strftime('%Y-%m-%d à %H:%M:%S')}**\n")
+                f.write("*Stack Overflow Scraper & Analyzer - Version complète*\n")
             
-            # Configuration du style
-            plt.style.use('seaborn-v0_8')
-            
-            # 1. Graphique des tags tendances
-            if 'tag_trends' in results and 'trending_tags' in results['tag_trends']:
-                self._plot_trending_tags(results['tag_trends']['trending_tags'], output_dir, timestamp)
-            
-            # 2. Patterns temporels
-            if 'temporal_patterns' in results:
-                self._plot_temporal_patterns(results['temporal_patterns'], output_dir, timestamp)
-            
-            # 3. Statistiques générales
-            if 'general_stats' in results:
-                self._plot_general_stats(results['general_stats'], output_dir, timestamp)
-            
-            self.logger.info(f"Visualisations générées avec succès dans {output_dir}")
+            self.logger.info(f"📄 Rapport complet généré: {complete_file}")
             
         except Exception as e:
-            self.logger.error(f"Erreur lors de la génération des visualisations: {e}")
+            self.logger.error(f"Erreur lors de la génération du rapport complet: {e}")
     
-    def _plot_trending_tags(self, trending_tags: List[Dict], output_dir, timestamp: str) -> None:
-        """Génère un graphique des tags en tendance."""
-        if not trending_tags:
-            return
+    
+    def _write_execution_info(self, f, results: Dict[str, Any]) -> None:
+        """Écrit les informations d'exécution générale."""
+        f.write("## 🚀 INFORMATIONS D'EXÉCUTION GÉNÉRALE\n\n")
         
-        tags = [tag['tag'] for tag in trending_tags[:15]]
-        growth_rates = [tag['growth_rate'] for tag in trending_tags[:15]]
+        # Informations de base
+        if 'execution_info' in results:
+            exec_info = results['execution_info']
+            f.write("### Configuration d'exécution\n\n")
+            f.write(f"- **Date de démarrage**: {exec_info.get('start_time', 'N/A')}\n")
+            f.write(f"- **Questions demandées**: {exec_info.get('max_questions', 'N/A')}\n")
+            f.write(f"- **Tags ciblés**: {', '.join(exec_info.get('target_tags', [])) if exec_info.get('target_tags') else 'Tous les tags'}\n")
+            f.write(f"- **Mode d'extraction**: {exec_info.get('extraction_mode', 'N/A')}\n")
+            if 'total_duration' in exec_info:
+                f.write(f"- **⏱️ Temps total d'exécution**: {exec_info['total_duration']:.2f} secondes\n")
+            f.write("\n")
         
-        plt.figure(figsize=(12, 8))
-        bars = plt.barh(tags, growth_rates)
-        plt.xlabel('Taux de croissance (%)')
-        plt.title('Tags en tendance (croissance mensuelle)')
-        plt.tight_layout()
+        # Résumé des phases
+        f.write("### Résumé des phases d'exécution\n\n")
+        if 'execution_info' in results:
+            exec_info = results['execution_info']
+            f.write("| Phase | Durée (s) | Status |\n")
+            f.write("|-------|-----------|--------|\n")
+            phases = [
+                ('scraping', '🔍 Extraction'),
+                ('storage', '💾 Stockage'),
+                ('analysis', '📊 Analyse')
+            ]
+            
+            for phase_key, phase_name in phases:
+                duration = exec_info.get(f'{phase_key}_duration', 'N/A')
+                status = exec_info.get(f'{phase_key}_status', '✅ Terminé')
+                if isinstance(duration, (int, float)):
+                    f.write(f"| {phase_name} | {duration:.2f} | {status} |\n")
+                else:
+                    f.write(f"| {phase_name} | {duration} | {status} |\n")
+            f.write("\n")
+    
+    def _write_scraping_info(self, f, results: Dict[str, Any]) -> None:
+        """Écrit les informations de la phase de scraping."""
+        f.write("## 🔍 PHASE 1: EXTRACTION DES DONNÉES\n\n")
         
-        # Couleurs conditionnelles
-        for i, bar in enumerate(bars):
-            if growth_rates[i] > 0:
-                bar.set_color('green')
-            else:
-                bar.set_color('red')
+        if 'execution_info' in results:
+            exec_info = results['execution_info']
+            f.write("### Résultats de l'extraction\n\n")
+            f.write(f"- **Questions extraites**: {exec_info.get('questions_extracted', 'N/A')}\n")
+            f.write(f"- **Auteurs uniques**: {exec_info.get('unique_authors', 'N/A')}\n")
+            f.write(f"- **Tags uniques**: {exec_info.get('unique_tags', 'N/A')}\n")
+            if 'extraction_rate' in exec_info:
+                f.write(f"- **Taux d'extraction**: {exec_info['extraction_rate']:.1f} questions/sec\n")
+            f.write("\n")
+            
+            # Erreurs et problèmes
+            if exec_info.get('extraction_errors', 0) > 0:
+                f.write("### ⚠️ Erreurs d'extraction\n\n")
+                f.write(f"- **Erreurs rencontrées**: {exec_info['extraction_errors']}\n")
+                f.write(f"- **Taux d'erreur**: {exec_info.get('error_rate', 0):.1f}%\n\n")
+    
+    def _write_storage_info(self, f, results: Dict[str, Any]) -> None:
+        """Écrit les informations de la phase de stockage."""
+        f.write("## 💾 PHASE 2: STOCKAGE EN BASE DE DONNÉES\n\n")
         
-        # Sauvegarde dans le dossier output/visualizations
-        output_file = output_dir / f'trending_tags_{timestamp}.png'
-        plt.savefig(output_file, dpi=300, bbox_inches='tight')
-        plt.close()
-        self.logger.info(f"Graphique des tags tendances sauvegardé: {output_file}")
+        if 'execution_info' in results:
+            exec_info = results['execution_info']
+            f.write("### Opérations de stockage\n\n")
+            f.write(f"- **Questions stockées**: {exec_info.get('questions_stored', 'N/A')}\n")
+            f.write(f"- **Auteurs stockés**: {exec_info.get('authors_stored', 'N/A')}\n")
+            if 'storage_rate' in exec_info:
+                f.write(f"- **Taux de stockage**: {exec_info['storage_rate']:.1f} questions/sec\n")
+            f.write("\n")
     
-    def _plot_temporal_patterns(self, temporal_data: Dict, output_dir, timestamp: str) -> None:
-        """Génère des graphiques des patterns temporels."""
-        if 'hourly_patterns' in temporal_data:
-            # Graphique par heure
-            hourly_counts = temporal_data['hourly_patterns'].get(('votes', 'count'), {})
-            if hourly_counts:
-                hours = list(hourly_counts.keys())
-                counts = list(hourly_counts.values())
-                
-                plt.figure(figsize=(12, 6))
-                plt.plot(hours, counts, marker='o')
-                plt.xlabel('Heure de la journée')
-                plt.ylabel('Nombre de questions')
-                plt.title('Distribution des questions par heure')
-                plt.grid(True, alpha=0.3)
-                plt.tight_layout()
-                
-                # Sauvegarde dans le dossier output/visualizations
-                output_file = output_dir / f'temporal_patterns_{timestamp}.png'
-                plt.savefig(output_file, dpi=300, bbox_inches='tight')
-                plt.close()
-                self.logger.info(f"Graphique des patterns temporels sauvegardé: {output_file}")
+    def _write_analysis_info(self, f, results: Dict[str, Any]) -> None:
+        """Écrit les informations de la phase d'analyse."""
+        f.write("## 📊 PHASE 3: ANALYSE DES DONNÉES\n\n")
+        
+        if 'analysis_metadata' in results:
+            meta = results['analysis_metadata']
+            f.write("### Configuration de l'analyse\n\n")
+            f.write(f"- **Date d'analyse**: {meta.get('analysis_date', 'N/A')}\n")
+            f.write(f"- **Questions analysées**: {meta.get('total_questions', 0)}\n")
+            f.write(f"- **Durée de l'analyse**: {meta.get('duration', 0):.2f} secondes\n")
+            if 'date_range' in meta and meta['date_range']['start']:
+                f.write(f"- **Période couverte**: {meta['date_range']['start']} à {meta['date_range']['end']}\n")
+            f.write("\n")
     
-    def _plot_general_stats(self, stats: Dict, output_dir, timestamp: str) -> None:
-        """Génère des graphiques des statistiques générales."""
-        if 'tag_stats' in stats and 'most_common_tags' in stats['tag_stats']:
-            most_common = stats['tag_stats']['most_common_tags'][:15]
-            tags = [tag[0] for tag in most_common]
-            counts = [tag[1] for tag in most_common]
-            
-            plt.figure(figsize=(12, 8))
-            plt.barh(tags, counts)
-            plt.xlabel('Nombre de questions')
-            plt.title('Tags les plus populaires')
-            plt.tight_layout()
-            
-            # Sauvegarde dans le dossier output/visualizations
-            output_file = output_dir / f'general_stats_{timestamp}.png'
-            plt.savefig(output_file, dpi=300, bbox_inches='tight')
-            plt.close()
-            self.logger.info(f"Graphique des statistiques générales sauvegardé: {output_file}")
-    
-    async def _generate_reports(self, results: Dict[str, Any], reports_dir, timestamp: str) -> None:
-        """Génère des rapports textuels des résultats d'analyse."""
-        try:
-            # Rapport de synthèse (format texte)
-            summary_file = reports_dir / f"summary_report_{timestamp}.txt"
-            await self._generate_summary_report(results, summary_file)
-            
-            # Rapport détaillé (format Markdown)
-            detailed_file = reports_dir / f"detailed_analysis_{timestamp}.md"
-            await self._generate_detailed_report(results, detailed_file)
-            
-            self.logger.info(f"Rapports générés dans {reports_dir}")
-            
-        except Exception as e:
-            self.logger.error(f"Erreur lors de la génération des rapports: {e}")
-    
-    async def _generate_summary_report(self, results: Dict[str, Any], output_file) -> None:
-        """Génère un rapport de synthèse."""
-        with open(output_file, 'w', encoding='utf-8') as f:
-            f.write("RAPPORT DE SYNTHÈSE - ANALYSE STACK OVERFLOW\n")
-            f.write("=" * 50 + "\n\n")
-            
-            # Métadonnées
-            if 'analysis_metadata' in results:
-                meta = results['analysis_metadata']
-                f.write(f"Date d'analyse: {meta.get('analysis_date', 'N/A')}\n")
-                f.write(f"Questions analysées: {meta.get('total_questions', 0)}\n")
-                f.write(f"Durée de l'analyse: {meta.get('duration', 0):.2f} secondes\n\n")
-            
-            # Tags tendances
-            if 'tag_trends' in results and 'trending_tags' in results['tag_trends']:
-                f.write("TOP 10 TAGS EN TENDANCE:\n")
-                f.write("-" * 25 + "\n")
-                for i, tag in enumerate(results['tag_trends']['trending_tags'][:10], 1):
-                    f.write(f"{i:2d}. {tag['tag']} (croissance: {tag['growth_rate']:.1f}%)\n")
+    def _write_detailed_analysis_results(self, f, results: Dict[str, Any]) -> None:
+        """Écrit les résultats détaillés de l'analyse."""
+        f.write("## 📈 RÉSULTATS D'ANALYSE DÉTAILLÉS\n\n")
+        
+        # Tags tendances
+        if 'tag_trends' in results:
+            f.write("### 🏷️ Analyse des Tags\n\n")
+            if 'trending_tags' in results['tag_trends']:
+                f.write("#### Tags en Tendance\n\n")
+                f.write("| Rang | Tag | Croissance (%) | Questions Totales | Dernière Semaine | Dernier Mois |\n")
+                f.write("|------|-----|----------------|-------------------|------------------|---------------|\n")
+                for i, tag in enumerate(results['tag_trends']['trending_tags'][:15], 1):
+                    f.write(f"| {i} | `{tag['tag']}` | {tag['growth_rate']:.1f}% | {tag['total_questions']} | {tag.get('last_week', 'N/A')} | {tag.get('last_month', 'N/A')} |\n")
                 f.write("\n")
+        
+        # Patterns temporels
+        if 'temporal_patterns' in results:
+            f.write("### ⏰ Patterns Temporels\n\n")
+            temporal = results['temporal_patterns']
+            f.write("#### Activité par période\n\n")
+            if 'peak_hour' in temporal:
+                f.write(f"- **🕐 Heure de pic d'activité**: {temporal['peak_hour']}h\n")
+            if 'peak_day' in temporal:
+                days = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche']
+                day_name = days[temporal['peak_day']] if temporal['peak_day'] < 7 else f"Jour {temporal['peak_day']}"
+                f.write(f"- **📅 Jour de pic d'activité**: {day_name}\n")
+            f.write(f"- **📊 Questions analysées**: {temporal.get('total_questions_analyzed', 0)}\n")
+            f.write("\n")
+        
+        # Analyse de contenu NLP
+        if 'content_analysis' in results:
+            f.write("### 📝 Analyse de Contenu (NLP)\n\n")
+            content = results['content_analysis']
             
-            # Statistiques générales
-            if 'general_stats' in results:
-                stats = results['general_stats']
-                f.write("STATISTIQUES GÉNÉRALES:\n")
-                f.write("-" * 20 + "\n")
-                if 'vote_stats' in stats:
-                    f.write(f"Score moyen: {stats['vote_stats'].get('mean', 0):.1f}\n")
-                if 'view_stats' in stats:
-                    f.write(f"Vues moyennes: {stats['view_stats'].get('mean', 0):.0f}\n")
-                if 'answer_stats' in stats:
-                    f.write(f"Taux sans réponse: {stats['answer_stats'].get('unanswered_rate', 0):.1f}%\n")
+            # Mots-clés des titres
+            if 'title_keywords' in content and content['title_keywords']:
+                f.write("#### 🔤 Mots-clés des Titres (TF-IDF)\n\n")
+                f.write("| Rang | Mot-clé | Score TF-IDF | Signification |\n")
+                f.write("|------|---------|--------------|---------------|\n")
+                for i, (keyword, score) in enumerate(content['title_keywords'][:15], 1):
+                    significance = "Très important" if score > 0.5 else "Important" if score > 0.2 else "Modéré" if score > 0.1 else "Faible"
+                    f.write(f"| {i} | `{keyword}` | {score:.3f} | {significance} |\n")
                 f.write("\n")
+                
+                # Explication des scores TF-IDF
+                f.write("💡 **Note**: Les scores TF-IDF mesurent l'importance statistique des mots dans le corpus. Un score plus élevé indique un terme plus significatif et distinctif.\n\n")
             
             # Analyse de sentiment
-            if 'content_analysis' in results:
-                content = results['content_analysis']
-                f.write("ANALYSE DE SENTIMENT:\n")
-                f.write("-" * 20 + "\n")
-                if 'title_sentiment' in content:
-                    sent = content['title_sentiment']
-                    f.write(f"Sentiment des titres - Positif: {sent.get('positive', 0)}, ")
-                    f.write(f"Neutre: {sent.get('neutral', 0)}, Négatif: {sent.get('negative', 0)}\n")
-                f.write("\n")
+            if 'title_sentiment' in content:
+                f.write("#### 😊 Analyse de Sentiment des Titres\n\n")
+                sent = content['title_sentiment']
+                total = sent.get('total', 1)
+                if total > 0:
+                    pos_pct = (sent.get('positive', 0) / total) * 100
+                    neu_pct = (sent.get('neutral', 0) / total) * 100
+                    neg_pct = (sent.get('negative', 0) / total) * 100
+                    
+                    f.write("| Sentiment | Nombre | Pourcentage |\n")
+                    f.write("|-----------|--------|--------------|\n")
+                    f.write(f"| 😊 **Positif** | {sent.get('positive', 0)} | {pos_pct:.1f}% |\n")
+                    f.write(f"| 😐 **Neutre** | {sent.get('neutral', 0)} | {neu_pct:.1f}% |\n")
+                    f.write(f"| 😞 **Négatif** | {sent.get('negative', 0)} | {neg_pct:.1f}% |\n")
+                    f.write(f"| 📊 **Score moyen** | - | {sent.get('average', 0):.3f} |\n")
+                    f.write("\n")
+                    
+                    # Explication du score de sentiment
+                    f.write("💡 **Note**: Le score de sentiment varie de -1 (très négatif) à +1 (très positif). Un score proche de 0 indique un contenu neutre/technique.\n\n")
         
-        self.logger.info(f"Rapport de synthèse sauvegardé: {output_file}")
+        # Analyse des auteurs
+        if 'author_analysis' in results and 'top_authors' in results['author_analysis']:
+            f.write("### 👥 Analyse des Auteurs\n\n")
+            f.write("#### Top Contributeurs\n\n")
+            f.write("| Rang | Auteur | Réputation | Questions | Activité |\n")
+            f.write("|------|--------|------------|-----------|----------|\n")
+            for i, author in enumerate(results['author_analysis']['top_authors'][:10], 1):
+                author_name = author.get('author_name', author.get('name', 'N/A'))
+                reputation = author.get('reputation', 0)
+                questions = author.get('question_count', 0)
+                activity = "🔥 Très actif" if questions >= 10 else "⚡ Actif" if questions >= 5 else "📝 Contributeur"
+                f.write(f"| {i} | **{author_name}** | {reputation:,} | {questions} | {activity} |\n")
+            f.write("\n")
+            
+            # Statistiques des auteurs
+            if 'reputation_stats' in results['author_analysis']:
+                rep_stats = results['author_analysis']['reputation_stats']
+                f.write("#### 📊 Statistiques de Réputation\n\n")
+                f.write(f"- **Réputation moyenne**: {rep_stats.get('mean', 0):.0f} points\n")
+                f.write(f"- **Réputation médiane**: {rep_stats.get('median', 0):.0f} points\n")
+                f.write(f"- **Réputation maximale**: {rep_stats.get('max', 0):,} points\n")
+                f.write(f"- **Réputation minimale**: {rep_stats.get('min', 0):,} points\n")
+                f.write("\n")
     
-    async def _generate_detailed_report(self, results: Dict[str, Any], output_file) -> None:
-        """Génère un rapport détaillé en Markdown."""
-        with open(output_file, 'w', encoding='utf-8') as f:
-            f.write("# 📊 Rapport d'Analyse Détaillé - Stack Overflow\n\n")
+    def _write_performance_stats(self, f, results: Dict[str, Any]) -> None:
+        """Écrit les statistiques de performance et générales."""
+        f.write("## 📊 STATISTIQUES GÉNÉRALES ET PERFORMANCE\n\n")
+        
+        if 'general_stats' in results:
+            stats = results['general_stats']
             
-            # Métadonnées
-            if 'analysis_metadata' in results:
-                meta = results['analysis_metadata']
-                f.write("## 📋 Informations Générales\n\n")
-                f.write(f"- **Date d'analyse**: {meta.get('analysis_date', 'N/A')}\n")
-                f.write(f"- **Questions analysées**: {meta.get('total_questions', 0)}\n")
-                f.write(f"- **Durée de l'analyse**: {meta.get('duration', 0):.2f} secondes\n")
-                if 'date_range' in meta and meta['date_range']['start']:
-                    f.write(f"- **Période couverte**: {meta['date_range']['start']} à {meta['date_range']['end']}\n")
-                f.write("\n")
+            # Statistiques des questions
+            f.write("### 📋 Statistiques des Questions\n\n")
+            if 'vote_stats' in stats:
+                vote_stats = stats['vote_stats']
+                f.write("#### 👍 Votes et Scores\n")
+                f.write(f"- **Score moyen**: {vote_stats.get('mean', 0):.2f}\n")
+                f.write(f"- **Score médian**: {vote_stats.get('median', 0):.2f}\n")
+                f.write(f"- **Score maximum**: {vote_stats.get('max', 0)}\n")
+                f.write(f"- **Écart-type**: {vote_stats.get('std', 0):.2f}\n\n")
             
-            # Analyse des tags
-            if 'tag_trends' in results:
-                f.write("## 🏷️ Analyse des Tags\n\n")
-                if 'trending_tags' in results['tag_trends']:
-                    f.write("### Tags en Tendance\n\n")
-                    f.write("| Rang | Tag | Croissance (%) | Questions Totales |\n")
-                    f.write("|------|-----|----------------|-------------------|\n")
-                    for i, tag in enumerate(results['tag_trends']['trending_tags'][:15], 1):
-                        f.write(f"| {i} | {tag['tag']} | {tag['growth_rate']:.1f}% | {tag['total_questions']} |\n")
-                    f.write("\n")
+            if 'view_stats' in stats:
+                view_stats = stats['view_stats']
+                f.write("#### 👀 Vues et Visibilité\n")
+                f.write(f"- **Vues moyennes**: {view_stats.get('mean', 0):.0f}\n")
+                f.write(f"- **Vues médianes**: {view_stats.get('median', 0):.0f}\n")
+                f.write(f"- **Vues maximum**: {view_stats.get('max', 0):,}\n")
+                f.write(f"- **Écart-type**: {view_stats.get('std', 0):.0f}\n\n")
             
-            # Patterns temporels
-            if 'temporal_patterns' in results:
-                f.write("## ⏰ Patterns Temporels\n\n")
-                temporal = results['temporal_patterns']
-                if 'peak_hour' in temporal:
-                    f.write(f"- **Heure de pic**: {temporal['peak_hour']}h\n")
-                if 'peak_day' in temporal:
-                    days = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche']
-                    day_name = days[temporal['peak_day']] if temporal['peak_day'] < 7 else f"Jour {temporal['peak_day']}"
-                    f.write(f"- **Jour de pic**: {day_name}\n")
-                f.write("\n")
+            if 'answer_stats' in stats:
+                answer_stats = stats['answer_stats']
+                f.write("#### 💬 Réponses et Engagement\n")
+                f.write(f"- **Réponses moyennes**: {answer_stats.get('mean', 0):.2f}\n")
+                f.write(f"- **Réponses médianes**: {answer_stats.get('median', 0):.2f}\n")
+                f.write(f"- **Réponses maximum**: {answer_stats.get('max', 0)}\n")
+                f.write(f"- **Taux sans réponse**: {answer_stats.get('unanswered_rate', 0):.1f}%\n\n")
             
-            # Analyse de contenu
-            if 'content_analysis' in results:
-                f.write("## 📝 Analyse de Contenu\n\n")
-                content = results['content_analysis']
+            # Statistiques des tags
+            if 'tag_stats' in stats:
+                tag_stats = stats['tag_stats']
+                f.write("### 🏷️ Statistiques des Tags\n\n")
+                f.write(f"- **Tags uniques**: {tag_stats.get('total_unique_tags', 0)}\n")
+                f.write(f"- **Tags par question (moyenne)**: {tag_stats.get('average_tags_per_question', 0):.2f}\n\n")
                 
-                if 'title_keywords' in content:
-                    f.write("### Mots-clés des Titres\n\n")
-                    for i, (keyword, score) in enumerate(content['title_keywords'][:10], 1):
-                        f.write(f"{i}. **{keyword}** (score: {score:.3f})\n")
+                if 'most_common_tags' in tag_stats:
+                    f.write("#### Top Tags par Popularité\n\n")
+                    f.write("| Rang | Tag | Questions |\n")
+                    f.write("|------|-----|----------|\n")
+                    for i, (tag, count) in enumerate(tag_stats['most_common_tags'][:15], 1):
+                        f.write(f"| {i} | `{tag}` | {count} |\n")
                     f.write("\n")
+        
+        # Performance système
+        if 'execution_info' in results:
+            exec_info = results['execution_info']
+            f.write("### ⚡ Performance du Système\n\n")
+            if 'total_duration' in exec_info:
+                total_time = exec_info['total_duration']
+                questions = exec_info.get('questions_extracted', 0)
+                if questions > 0:
+                    f.write(f"- **Efficacité globale**: {questions/total_time:.1f} questions/seconde\n")
+                f.write(f"- **Temps total d'exécution**: {total_time:.2f} secondes\n")
                 
-                if 'title_sentiment' in content:
-                    f.write("### Analyse de Sentiment\n\n")
-                    sent = content['title_sentiment']
-                    total = sent.get('total', 1)
-                    f.write(f"- **Positif**: {sent.get('positive', 0)} ({sent.get('positive', 0)/total*100:.1f}%)\n")
-                    f.write(f"- **Neutre**: {sent.get('neutral', 0)} ({sent.get('neutral', 0)/total*100:.1f}%)\n")
-                    f.write(f"- **Négatif**: {sent.get('negative', 0)} ({sent.get('negative', 0)/total*100:.1f}%)\n")
-                    f.write(f"- **Score moyen**: {sent.get('average', 0):.3f}\n\n")
-            
-            # Analyse des auteurs
-            if 'author_analysis' in results and 'top_authors' in results['author_analysis']:
-                f.write("## 👥 Top Auteurs\n\n")
+                # Répartition du temps par phase
+                phases = ['scraping', 'storage', 'analysis']
+                f.write("\n#### Répartition du temps par phase\n\n")
+                f.write("| Phase | Temps (s) | Pourcentage |\n")
+                f.write("|-------|-----------|-------------|\n")
+                for phase in phases:
+                    duration = exec_info.get(f'{phase}_duration', 0)
+                    if isinstance(duration, (int, float)) and total_time > 0:
+                        percentage = (duration / total_time) * 100
+                        phase_name = {'scraping': '🔍 Extraction', 'storage': '💾 Stockage', 'analysis': '📊 Analyse'}.get(phase, phase)
+                        f.write(f"| {phase_name} | {duration:.2f} | {percentage:.1f}% |\n")
+                f.write("\n")
                 f.write("| Rang | Auteur | Réputation | Questions |\n")
                 f.write("|------|--------|------------|----------|\n")
-                for i, author in enumerate(results['author_analysis']['top_authors'][:10], 1):
-                    f.write(f"| {i} | {author.get('name', 'N/A')} | {author.get('reputation', 0):,} | {author.get('question_count', 0)} |\n")
-                f.write("\n")
-            
-            f.write("---\n")
-            f.write(f"*Rapport généré le {datetime.now().strftime('%Y-%m-%d à %H:%M:%S')}*\n")
-        
-        self.logger.info(f"Rapport détaillé sauvegardé: {output_file}")

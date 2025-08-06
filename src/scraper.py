@@ -67,9 +67,43 @@ class StackOverflowScraper:
             config: Configuration contenant les paramètres du scraper
         """
         self.config = config
+        
+        # Gérer les deux types de configuration possibles
+        if hasattr(config, 'api_config'):
+            # Objet Config complet
+            self.api_config = config.api_config
+            self.scraper_config = config.scraper_config
+        elif hasattr(config, 'get'):
+            # Dictionnaire
+            self.api_config = config.get('api', {})
+            self.scraper_config = config
+        else:
+            # ScraperConfig seul - pas d'API config disponible
+            from .config import APIConfig
+            self.api_config = APIConfig()
+            self.scraper_config = config
+            
         self.logger = logging.getLogger(__name__)
         self.session = None
         self.driver = None
+        
+    def _get_config_value(self, key: str, default=None):
+        """
+        Méthode helper pour accéder aux valeurs de configuration.
+        
+        Args:
+            key: Clé de configuration
+            default: Valeur par défaut
+            
+        Returns:
+            Valeur de configuration
+        """
+        if hasattr(self.scraper_config, 'get'):
+            # Configuration dictionnaire
+            return self.scraper_config.get(key, default)
+        else:
+            # Configuration dataclass
+            return getattr(self.scraper_config, key, default)
         
     async def __aenter__(self):
         """Context manager entry."""
@@ -84,16 +118,16 @@ class StackOverflowScraper:
         """Configure la session HTTP et le driver Selenium."""
         # Configuration de la session aiohttp
         connector = aiohttp.TCPConnector(limit=10, limit_per_host=5)
-        timeout = aiohttp.ClientTimeout(total=self.config.timeout)
+        timeout = aiohttp.ClientTimeout(total=self._get_config_value('timeout', 30))
         self.session = aiohttp.ClientSession(
             connector=connector,
             timeout=timeout,
-            headers={'User-Agent': self.config.user_agent}
+            headers={'User-Agent': self._get_config_value('user_agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36')}
         )
         
         # Configuration du driver Selenium
         chrome_options = Options()
-        if self.config.headless:
+        if self._get_config_value('headless', True):
             chrome_options.add_argument('--headless')
         
         # Options de base pour la stabilité
@@ -108,6 +142,9 @@ class StackOverflowScraper:
         chrome_options.add_argument('--disable-background-timer-throttling')
         chrome_options.add_argument('--disable-backgrounding-occluded-windows')
         chrome_options.add_argument('--disable-renderer-backgrounding')
+        chrome_options.add_argument('--use-gl=swiftshader')  # Force software rendering
+        chrome_options.add_argument('--disable-angle')      # Disable ANGLE OpenGL backend
+        chrome_options.add_argument('--disable-3d-apis')    # Disable WebGL and other 3D APIs
         chrome_options.add_argument('--disable-features=TranslateUI')
         chrome_options.add_argument('--disable-ipc-flooding-protection')
         chrome_options.add_argument('--disable-default-apps')
@@ -203,28 +240,10 @@ class StackOverflowScraper:
                 await asyncio.sleep(5)
                 break
         
-        # Enrichir les données des questions
-        enriched_questions = []
-        for question in questions[:max_questions]:
-            try:
-                enriched_question = await self._enrich_question_data(question)
-                enriched_questions.append(enriched_question)
-                
-                # Délai plus long entre les enrichissements
-                delay = random.uniform(2, 4)
-                await asyncio.sleep(delay)
-                
-            except ConnectionResetError as e:
-                self.logger.error(f"Connexion fermée lors de l'enrichissement de {question.url}: {e}")
-                self.logger.info("Utilisation des données de base sans enrichissement")
-                enriched_questions.append(question)
-                await asyncio.sleep(5)
-            except Exception as e:
-                self.logger.error(f"Erreur lors de l'enrichissement de la question {question.url}: {e}")
-                enriched_questions.append(question)
-        
-        self.logger.info(f"Scraping terminé: {len(enriched_questions)} questions extraites")
-        return enriched_questions
+        # Retourner les questions extraites (toutes les données sont récupérées dès l'extraction initiale)
+        final_questions = questions[:max_questions]
+        self.logger.info(f"Scraping terminé: {len(final_questions)} questions extraites")
+        return final_questions
     
     def _build_search_url(
         self,
@@ -275,6 +294,9 @@ class StackOverflowScraper:
             url = urljoin(self.BASE_URL, relative_url)
             question_id = int(relative_url.split('/')[2])
             
+            # Debug pour vérifier les titres
+            self.logger.debug(f"🔍 Titre extrait: '{title}' | URL: {relative_url}")
+            
             # Résumé/extrait
             summary_element = element.find('div', class_='s-post-summary--content-excerpt')
             summary = summary_element.get_text(strip=True) if summary_element else ""
@@ -293,13 +315,25 @@ class StackOverflowScraper:
             view_count = 0
             
             if stats:
-                vote_element = stats.find('div', class_='s-post-summary--stats-item-number')
-                if vote_element:
-                    vote_count = int(vote_element.get_text(strip=True) or 0)
+                # Chercher tous les éléments de statistiques
+                stat_items = stats.find_all('div', class_='s-post-summary--stats-item')
                 
-                answer_elements = stats.find_all('div', class_='s-post-summary--stats-item-number')
-                if len(answer_elements) > 1:
-                    answer_count = int(answer_elements[1].get_text(strip=True) or 0)
+                for stat_item in stat_items:
+                    stat_title = stat_item.get('title', '').lower()  # Renommé pour éviter la collision
+                    number_element = stat_item.find('span', class_='s-post-summary--stats-item-number')
+                    
+                    if number_element:
+                        try:
+                            value = int(number_element.get_text(strip=True) or 0)
+                            
+                            if 'score' in stat_title or 'votes' in stat_title:
+                                vote_count = value
+                            elif 'answer' in stat_title:
+                                answer_count = value
+                            elif 'view' in stat_title:
+                                view_count = value
+                        except (ValueError, TypeError):
+                            continue
             
             # Informations de l'auteur (basiques)
             author_element = element.find('div', class_='s-user-card--link')
@@ -313,8 +347,39 @@ class StackOverflowScraper:
                     author_name = author_link.get_text(strip=True)
                     author_profile_url = urljoin(self.BASE_URL, author_link.get('href', ''))
             
-            # Date (à enrichir plus tard)
-            publication_date = datetime.now()  # Sera mise à jour lors de l'enrichissement
+            # Récupération de la réputation depuis la page de liste
+            user_card = element.find('div', class_='s-user-card')
+            if user_card:
+                # Essayer plusieurs sélecteurs pour la réputation
+                rep_element = user_card.find('span', title=lambda x: x and 'reputation' in x.lower())
+                if not rep_element:
+                    rep_element = user_card.find('span', class_='todo-no-class-here')
+                
+                if rep_element:
+                    rep_text = rep_element.get_text(strip=True)
+                    try:
+                        # Convertir k, m en nombres
+                        if 'k' in rep_text.lower():
+                            author_reputation = int(float(rep_text.lower().replace('k', '')) * 1000)
+                        elif 'm' in rep_text.lower():
+                            author_reputation = int(float(rep_text.lower().replace('m', '')) * 1000000)
+                        else:
+                            author_reputation = int(rep_text.replace(',', ''))
+                    except (ValueError, TypeError):
+                        author_reputation = 0
+            
+            # Date depuis la page de liste (plus précise que datetime.now())
+            publication_date = datetime.now()  # Valeur par défaut
+            time_element = element.find('span', class_='relativetime')
+            if time_element and time_element.get('title'):
+                try:
+                    # Format: '2025-08-06 10:39:52Z'
+                    date_str = time_element.get('title')
+                    if date_str.endswith('Z'):
+                        date_str = date_str[:-1] + '+00:00'
+                    publication_date = datetime.fromisoformat(date_str)
+                except (ValueError, AttributeError):
+                    pass  # Garder la valeur par défaut
             
             return QuestionData(
                 title=title,
@@ -334,50 +399,6 @@ class StackOverflowScraper:
         except Exception as e:
             self.logger.error(f"Erreur lors de l'extraction des données de base: {e}")
             return None
-    
-    async def _enrich_question_data(self, question: QuestionData) -> QuestionData:
-        """Enrichit les données d'une question en visitant sa page détaillée."""
-        try:
-            self.driver.get(question.url)
-            await asyncio.sleep(random.uniform(1, 2))
-            
-            soup = BeautifulSoup(self.driver.page_source, 'html.parser')
-            
-            # Date de publication
-            time_element = soup.find('time', {'itemprop': 'dateCreated'})
-            if time_element:
-                date_str = time_element.get('datetime')
-                if date_str:
-                    question.publication_date = datetime.fromisoformat(date_str.replace('Z', '+00:00'))
-            
-            # Nombre de vues
-            view_element = soup.find('div', {'title': lambda x: x and 'viewed' in x.lower()})
-            if view_element:
-                view_text = view_element.get('title', '')
-                # Extraire le nombre de vues du texte
-                import re
-                view_match = re.search(r'(\d{1,3}(?:,\d{3})*)', view_text)
-                if view_match:
-                    view_count_str = view_match.group(1).replace(',', '')
-                    question.view_count = int(view_count_str)
-            
-            # Réputation de l'auteur
-            rep_element = soup.find('div', class_='reputation-score')
-            if rep_element:
-                rep_text = rep_element.get_text(strip=True)
-                # Convertir k, m en nombres
-                if 'k' in rep_text.lower():
-                    question.author_reputation = int(float(rep_text.lower().replace('k', '')) * 1000)
-                elif 'm' in rep_text.lower():
-                    question.author_reputation = int(float(rep_text.lower().replace('m', '')) * 1000000)
-                else:
-                    question.author_reputation = int(rep_text.replace(',', ''))
-            
-            return question
-            
-        except Exception as e:
-            self.logger.error(f"Erreur lors de l'enrichissement de {question.url}: {e}")
-            return question
     
     async def fetch_via_api(
         self,
@@ -413,6 +434,14 @@ class StackOverflowScraper:
                     'pagesize': page_size,
                     'filter': 'withbody'  # Inclut le corps de la question
                 }
+                
+                # Ajouter l'API key si disponible
+                if hasattr(self.api_config, 'key') and self.api_config.key:
+                    params['key'] = self.api_config.key
+                    self.logger.info("Utilisation de l'API key pour des quotas étendus")
+                elif hasattr(self.api_config, 'get') and self.api_config.get('key'):
+                    params['key'] = self.api_config['key']
+                    self.logger.info("Utilisation de l'API key pour des quotas étendus")
                 
                 if tags:
                     params['tagged'] = ';'.join(tags)

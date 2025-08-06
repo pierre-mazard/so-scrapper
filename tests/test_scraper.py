@@ -23,7 +23,7 @@ class TestStackOverflowScraper:
     @pytest.fixture
     def config(self):
         """Configuration de test."""
-        return Config().scraper_config
+        return Config()
     
     @pytest.fixture
     def scraper(self, config):
@@ -46,8 +46,15 @@ class TestStackOverflowScraper:
                 <a class="post-tag">testing</a>
             </div>
             <div class="s-post-summary--stats">
-                <div class="s-post-summary--stats-item-number">5</div>
-                <div class="s-post-summary--stats-item-number">2</div>
+                <div class="s-post-summary--stats-item" title="Score">
+                    <span class="s-post-summary--stats-item-number">5</span>
+                </div>
+                <div class="s-post-summary--stats-item" title="Answers">
+                    <span class="s-post-summary--stats-item-number">2</span>
+                </div>
+                <div class="s-post-summary--stats-item" title="Views">
+                    <span class="s-post-summary--stats-item-number">150</span>
+                </div>
             </div>
             <div class="s-user-card--link">
                 <a href="/users/12345/testuser">TestUser</a>
@@ -280,7 +287,7 @@ class TestScraperIntegration:
     @pytest.mark.slow
     async def test_real_stackoverflow_request(self):
         """Test avec une vraie requête Stack Overflow (marqué comme lent)."""
-        config = Config().scraper_config.__dict__
+        config = Config()
         scraper = StackOverflowScraper(config)
         
         try:

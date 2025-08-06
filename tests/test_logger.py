@@ -101,6 +101,13 @@ class TestLogger:
         self.main_logger.error(f"   Erreur: {error}")
         self.error_logger.error(f"ÉCHEC: {test_name} - {error}")
         
+    def log_test_error(self, test_name: str, error: str, duration: float = None):
+        """Log l'erreur d'un test (différent d'un échec)."""
+        duration_str = f" ({duration:.2f}s)" if duration else ""
+        self.main_logger.error(f"🚫 ERREUR: {test_name}{duration_str}")
+        self.main_logger.error(f"   Erreur: {error}")
+        self.error_logger.error(f"ERREUR: {test_name} - {error}")
+        
     def log_test_skip(self, test_name: str, reason: str):
         """Log le skip d'un test."""
         self.main_logger.warning(f"⏭️  IGNORÉ: {test_name}")

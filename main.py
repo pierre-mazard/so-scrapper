@@ -56,6 +56,14 @@ async def main(
     logger.info("[START] DÉMARRAGE DU STACK OVERFLOW SCRAPER")
     logger.info("=" * 60)
     
+    # Dictionnaire pour collecter les informations d'exécution
+    execution_info = {
+        'start_time': datetime.now().isoformat(),
+        'max_questions': max_questions,
+        'target_tags': tags or [],
+        'extraction_mode': 'API Stack Overflow' if use_api else 'Scraping web'
+    }
+    
     try:
         # Initialisation des composants
         logger.info("[INIT]  PHASE 0: Initialisation des composants...")
@@ -66,7 +74,10 @@ async def main(
         await db_manager.connect()  # Connexion à la base de données
         logger.info("[OK] Connexion à la base de données établie")
         
-        scraper = StackOverflowScraper(config.scraper_config)
+        scraper = StackOverflowScraper({
+            **config.scraper_config.__dict__,
+            'api': config.api_config.__dict__
+        })
         await scraper.setup_session()  # Initialisation de la session
         logger.info("[OK] Session de scraping initialisée")
         logger.info("[READY] Initialisation terminée - Début du processus principal...")
@@ -75,9 +86,10 @@ async def main(
         # Extraction des données
         logger.info(f"[EXTRACT] PHASE 1: Extraction de {max_questions} questions...")
         logger.info(f"Tags ciblés: {tags if tags else 'Tous les tags'}")
-        logger.info(f"Mode: {'API Stack Overflow' if use_api else 'Scraping web'}")
+        logger.info(f"Mode: {execution_info['extraction_mode']}")
         
         start_time = datetime.now()
+        scraping_start = start_time
         if use_api:
             questions_data = await scraper.fetch_via_api(
                 max_questions=max_questions,
@@ -89,7 +101,28 @@ async def main(
                 tags=tags
             )
         
-        extraction_time = datetime.now() - start_time
+        extraction_time = datetime.now() - scraping_start
+        execution_info.update({
+            'scraping_duration': extraction_time.total_seconds(),
+            'questions_extracted': len(questions_data),
+            'extraction_rate': len(questions_data) / extraction_time.total_seconds() if extraction_time.total_seconds() > 0 else 0,
+            'scraping_status': '✅ Terminé'
+        })
+        
+        # Calcul des statistiques d'extraction
+        unique_authors = set()
+        unique_tags = set()
+        for question in questions_data:
+            if question.author_name:
+                unique_authors.add(question.author_name)
+            if question.tags:
+                unique_tags.update(question.tags)
+        
+        execution_info.update({
+            'unique_authors': len(unique_authors),
+            'unique_tags': len(unique_tags)
+        })
+        
         logger.info(f"[OK] Extraction terminée: {len(questions_data)} questions récupérées en {extraction_time.total_seconds():.1f}s")
         
         # Stockage en base de données
@@ -99,6 +132,15 @@ async def main(
         storage_start = datetime.now()
         await db_manager.store_questions(questions_data)
         storage_time = datetime.now() - storage_start
+        
+        execution_info.update({
+            'storage_duration': storage_time.total_seconds(),
+            'questions_stored': len(questions_data),
+            'authors_stored': len(unique_authors),
+            'storage_rate': len(questions_data) / storage_time.total_seconds() if storage_time.total_seconds() > 0 else 0,
+            'storage_status': '✅ Terminé'
+        })
+        
         logger.info(f"[OK] Stockage terminé en {storage_time.total_seconds():.1f}s")
         
         # Analyse des données
@@ -107,28 +149,42 @@ async def main(
             logger.info("Initialisation de l'analyseur...")
             
             analyzer = DataAnalyzer(db_manager)
+            
+            # Passer les informations d'exécution à l'analyseur
+            total_time_so_far = (datetime.now() - start_time).total_seconds()
+            execution_info['total_duration_so_far'] = total_time_so_far
+            analyzer.set_execution_metadata(execution_info)
+            
             analysis_start = datetime.now()
             logger.info("Démarrage de l'analyse des tendances...")
             
             analysis_results = await analyzer.analyze_trends()
             analysis_time = datetime.now() - analysis_start
+            
+            execution_info.update({
+                'analysis_duration': analysis_time.total_seconds(),
+                'analysis_status': '✅ Terminé'
+            })
+            
             logger.info(f"[OK] Analyse terminée en {analysis_time.total_seconds():.1f}s")
             
-            # Sauvegarde des résultats d'analyse
-            logger.info("[STORE] Sauvegarde des résultats d'analyse...")
+            # Sauvegarde des résultats d'analyse (sans visualisations)
+            logger.info("[SAVE] Sauvegarde des résultats...")
             save_start = datetime.now()
             await analyzer.save_results(analysis_results)
-            
-            # Génération des visualisations
-            logger.info("[VIZ] Génération des visualisations...")
-            await analyzer.generate_visualizations(analysis_results)
-            
             save_time = datetime.now() - save_start
-            logger.info(f"[OK] Sauvegarde et visualisations terminées en {save_time.total_seconds():.1f}s")
+            
+            execution_info.update({
+                'save_duration': save_time.total_seconds()
+            })
+            
+            logger.info(f"[OK] Sauvegarde terminée en {save_time.total_seconds():.1f}s")
         else:
             logger.info("⏭️  Analyse des données désactivée")
         
         total_time = datetime.now() - start_time
+        execution_info['total_duration'] = total_time.total_seconds()
+        
         logger.info("🎉 PROCESSUS TERMINÉ AVEC SUCCÈS!")
         logger.info(f"Temps total:  Temps total d'exécution: {total_time.total_seconds():.1f}s")
         logger.info(f"Questions extraites: Résumé: {len(questions_data)} questions traitées")

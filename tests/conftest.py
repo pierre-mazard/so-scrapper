@@ -81,26 +81,52 @@ class TestResultsPlugin:
         
     def pytest_runtest_logreport(self, report):
         """Appelé pour chaque phase de test (setup, call, teardown)."""
-        if report.when == "call":  # Seulement pour la phase d'exécution du test
-            test_name = report.nodeid.split("::")[-1]
-            duration = getattr(report, 'duration', 0)
+        test_name = report.nodeid.split("::")[-1]
+        duration = getattr(report, 'duration', 0)
+        
+        # Gérer toutes les phases qui peuvent avoir des erreurs
+        if report.when in ["setup", "call", "teardown"] and report.outcome in ["failed", "error"]:
             
             if report.outcome == "passed":
-                self.stats['passed'] += 1
-                self.logger.log_test_pass(test_name, duration)
-                
-            elif report.outcome == "failed":
-                self.stats['failed'] += 1
+                # Seulement compter comme réussi si c'est dans la phase call
+                if report.when == "call":
+                    self.stats['passed'] += 1
+                    self.logger.log_test_pass(test_name, duration)
+                    
+            elif report.outcome in ["failed", "error"]:
+                # Différencier les erreurs et les échecs
                 error_msg = str(report.longrepr) if report.longrepr else "Erreur inconnue"
-                # Tronquer l'erreur si elle est trop longue
-                if len(error_msg) > 500:
-                    error_msg = error_msg[:500] + "... (tronqué)"
-                self.logger.log_test_fail(test_name, error_msg, duration)
                 
-            elif report.outcome == "skipped":
-                self.stats['skipped'] += 1
-                reason = report.longrepr[2] if report.longrepr else "Raison inconnue"
-                self.logger.log_test_skip(test_name, reason)
+                # Déterminer si c'est une erreur ou un échec basé sur le contenu
+                is_assertion_error = "AssertionError" in error_msg or "assert " in error_msg
+                is_setup_error = report.when == "setup"
+                
+                if is_setup_error or (not is_assertion_error and "Error" in error_msg):
+                    # C'est une erreur (problème de setup, AttributeError, etc.)
+                    if not hasattr(self.stats, 'errors'):
+                        self.stats['errors'] = 0
+                    self.stats['errors'] += 1
+                    
+                    # Tronquer l'erreur si elle est trop longue
+                    if len(error_msg) > 500:
+                        error_msg = error_msg[:500] + "... (tronqué)"
+                    self.logger.log_test_error(test_name, error_msg, duration)
+                else:
+                    # C'est un échec (assertion ratée)
+                    self.stats['failed'] += 1
+                    # Tronquer l'erreur si elle est trop longue
+                    if len(error_msg) > 500:
+                        error_msg = error_msg[:500] + "... (tronqué)"
+                    self.logger.log_test_fail(test_name, error_msg, duration)
+                    
+        elif report.when == "call" and report.outcome == "passed":
+            self.stats['passed'] += 1
+            self.logger.log_test_pass(test_name, duration)
+            
+        elif report.when == "call" and report.outcome == "skipped":
+            self.stats['skipped'] += 1
+            reason = report.longrepr[2] if report.longrepr else "Raison inconnue"
+            self.logger.log_test_skip(test_name, reason)
 
 
 def pytest_configure(config):

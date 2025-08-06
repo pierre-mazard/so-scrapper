@@ -337,14 +337,12 @@ class TestDataAnalyzer:
             # Vérifier la sauvegarde en base
             mock_db_manager.store_analysis_results.assert_called_once()
             
-            # Vérifier la sauvegarde en fichier
-            mock_open.assert_called_once()
-            mock_json_dump.assert_called_once()
+            # Vérifier la sauvegarde en fichier (peut être appelé plusieurs fois pour différents formats)
+            assert mock_open.call_count >= 1  # Au moins un appel
+            mock_json_dump.assert_called()
     
-    @patch('matplotlib.pyplot.savefig')
-    @patch('matplotlib.pyplot.close')
-    def test_generate_visualizations(self, mock_close, mock_savefig, data_analyzer):
-        """Test la génération de visualisations."""
+    def test_generate_complete_report(self, data_analyzer, tmp_path):
+        """Test la génération du rapport complet (remplace generate_visualizations)."""
         results = {
             "tag_trends": {
                 "trending_tags": [
@@ -367,9 +365,23 @@ class TestDataAnalyzer:
         # Le test ne doit pas lever d'exception
         try:
             import asyncio
-            asyncio.run(data_analyzer.generate_visualizations(results))
+            from datetime import datetime
+            
+            # Créer un répertoire temporaire et un timestamp
+            reports_dir = tmp_path / "reports"
+            reports_dir.mkdir()
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            
+            # Tester la génération du rapport complet avec tous les arguments requis
+            asyncio.run(data_analyzer._generate_complete_report(results, reports_dir, timestamp))
+            
+            # Vérifier qu'un fichier de rapport a été créé
+            report_file = reports_dir / f"rapport_complet_{timestamp}.md"
+            assert report_file.exists(), "Le fichier de rapport devrait être créé"
+            assert report_file.stat().st_size > 0, "Le rapport ne devrait pas être vide"
+            
         except Exception as e:
-            pytest.fail(f"generate_visualizations a levé une exception: {e}")
+            pytest.fail(f"_generate_complete_report a levé une exception: {e}")
 
 
 @pytest.mark.integration

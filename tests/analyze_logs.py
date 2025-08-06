@@ -44,6 +44,7 @@ class TestLogAnalyzer:
         results = {
             'passed': [],
             'failed': [],
+            'errors': [],  # Nouvelle catégorie pour les erreurs
             'skipped': [],
             'total_duration': 0,
             'start_time': None,
@@ -60,6 +61,7 @@ class TestLogAnalyzer:
         patterns = {
             'passed': r'✅ RÉUSSI: ([^(]+)(?:\(([0-9.]+)s\))?',
             'failed': r'❌ ÉCHEC: ([^(]+)(?:\(([0-9.]+)s\))?',
+            'errors': r'🚫 ERREUR: ([^(]+)(?:\(([0-9.]+)s\))?',  # Pattern pour les erreurs
             'skipped': r'⏭️  IGNORÉ: ([^\n]+)',
             'start': r'🔬 DÉBUT DE LA SESSION DE TESTS',
             'end': r'🏁 FIN DE LA SESSION DE TESTS',
@@ -77,6 +79,12 @@ class TestLogAnalyzer:
             test_name = match.group(1).strip()
             duration = float(match.group(2)) if match.group(2) else 0
             results['failed'].append({'name': test_name, 'duration': duration})
+            
+        # Extraire les erreurs de tests
+        for match in re.finditer(patterns['errors'], content):
+            test_name = match.group(1).strip()
+            duration = float(match.group(2)) if match.group(2) else 0
+            results['errors'].append({'name': test_name, 'duration': duration})
             
         # Extraire les tests ignorés
         for match in re.finditer(patterns['skipped'], content):
