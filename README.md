@@ -1132,8 +1132,7 @@ pytest tests/ --durations=10
 📁 tests/logs/
 ├── test_run_20250807_143334.log           # Log complet (28.5 KB)
 ├── test_summary_20250807_143334.log       # Résumé (750 bytes)
-├── test_errors_20250807_143334.log        # Erreurs uniquement (0 bytes)
-└── test_report_20250807_143334.txt        # Rapport structuré
+└── test_errors_20250807_143334.log        # Erreurs uniquement (0 bytes)
 
 📁 output/reports/
 └── rapport_tests_20250807_143405.md       # Rapport Markdown final
@@ -1141,30 +1140,70 @@ pytest tests/ --durations=10
 
 #### 📋 Structure du rapport généré
 ```markdown
-🧪 RAPPORT DE TESTS - STACK OVERFLOW SCRAPER
-═════════════════════════════════════════════
+# 🧪 RAPPORT DE TESTS - STACK OVERFLOW SCRAPER
 
-📊 RÉSUMÉ EXÉCUTIF
-─────────────────────
-• Tests totaux : 107
-• Réussis : 106 (99.1%) ✅
-• Échoués : 0 (0.0%) ❌  
-• Ignorés : 1 (0.9%) ⏭️
-• Durée : 28.90s ⚡
+*Rapport d'exécution de la suite de tests*
 
-🎯 PERFORMANCE PAR MODULE
-────────────────────────
-• test_main.py : 17/17 ✅ (Pipeline principal)
-• test_pipeline_e2e.py : 7/7 ✅ (End-to-end)
-• test_utils.py : 22/22 ✅ (Utilitaires)
-• test_analyzer.py : 21/22 ✅ (1 test skippé)
-• test_config.py : 20/20 ✅ (Configuration)
-• test_database.py : 16/16 ✅ (MongoDB)
-• test_scraper.py : 12/12 ✅ (Extraction)
+---
 
-🔍 TESTS IGNORÉS
-───────────────
-• test_full_analysis_workflow : Test d'intégration nécessitant une base réelle
+## 📊 RÉSUMÉ EXÉCUTIF
+
+### Informations générales
+
+- **Date d'exécution**: 2025-08-07 à 16:24:24
+- **Tests totaux exécutés**: 118
+- **Durée totale**: 47.68 secondes
+- **Taux de réussite**: 99.2%
+
+### Résultats par catégorie
+
+| Statut | Nombre | Pourcentage |
+|--------|--------|-------------|
+| ✅ **Réussis** | 117 | 99.2% |
+| ❌ **Échoués** | 0 | 0.0% |
+| 🚫 **Erreurs** | 0 | 0.0% |
+| ⏭️ **Ignorés** | 1 | 0.8% |
+
+## 📈 ANALYSE DÉTAILLÉE
+
+### ✅ Tests Réussis (117)
+
+| Test | Durée |
+|------|-------|
+| `test_preprocess_text` | 3.55s |
+| `test_preprocess_text_empty` | 0.00s |
+| ... (liste complète des 117 tests) ...
+
+### ⏭️ Tests Ignorés (1)
+
+| Test | Raison |
+|------|--------|
+| `test_full_analysis_workflow` | Ignoré |
+
+### 🐌 Tests les Plus Lents
+
+| Rang | Test | Durée | Statut |
+|------|------|-------|--------|
+| 1 | `test_real_stackoverflow_request` | 4.90s | ✅ Réussi |
+| 2 | `test_setup_session` | 4.35s | ✅ Réussi |
+| ... (top 5 des tests les plus lents) ...
+
+## 💡 RECOMMANDATIONS
+
+- 🎉 **Très bon**: Tous les tests actifs passent avec succès!
+
+## � DÉTAILS TECHNIQUES
+
+### Configuration de test
+- **Framework**: pytest
+- **Répertoire de tests**: `tests/`
+- **Mode d'exécution**: Verbeux avec traces courtes
+- **Logs générés**: `tests/logs/`
+
+### Performance
+- **Vitesse moyenne**: 2.5 tests/seconde
+- **Test le plus rapide**: 0.000s
+- **Test le plus lent**: 4.900s
 ```
 
 ### 🏗️ Configuration des tests avancée
