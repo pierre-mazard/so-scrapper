@@ -221,7 +221,7 @@ python main.py
 
 **Comportement par défaut :**
 - Extrait 300 questions via scraping web
-- Stocke en mode `update` (met à jour les existantes)
+- Stocke en mode `update` (met à jour les existantes et ajoute les nouvelles)
 - Effectue une analyse complète
 - Génère un rapport automatique
 
