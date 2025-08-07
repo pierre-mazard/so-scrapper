@@ -82,7 +82,8 @@ async def main(
     tags: Optional[list] = None,
     use_api: bool = False,
     analyze_data: bool = True,
-    storage_mode: str = "update"
+    storage_mode: str = "update",
+    analysis_scope: str = "all"
 ) -> None:
     """
     Fonction principale pour exécuter le scraping et l'analyse.
@@ -93,6 +94,7 @@ async def main(
         use_api: Utiliser l'API Stack Overflow au lieu du scraping
         analyze_data: Effectuer l'analyse des données après extraction
         storage_mode: Mode de stockage ("update", "append-only")
+        analysis_scope: Portée de l'analyse ("all", "new-only")
     """
     logger = logging.getLogger(__name__)
     logger.info("[START] DÉMARRAGE DU STACK OVERFLOW SCRAPER")
@@ -104,7 +106,8 @@ async def main(
         'max_questions': max_questions,
         'target_tags': tags or [],
         'extraction_mode': 'API Stack Overflow' if use_api else 'Scraping web',
-        'storage_mode': storage_mode
+        'storage_mode': storage_mode,
+        'analysis_scope': analysis_scope
     }
     
     try:
@@ -181,14 +184,29 @@ async def main(
         logger.info(f"Mode de stockage: {storage_mode}")
         
         storage_start = datetime.now()
+        new_questions_ids = []  # Pour traquer les nouvelles questions
         
         if storage_mode == "update":
             # Mode par défaut : mise à jour/ajout (upsert)
             stored_count = await db_manager.store_questions(questions_data)
+            # En mode update, on considère toutes les questions comme "nouvelles" pour l'analyse
+            new_questions_ids = [q.question_id for q in questions_data]
             
         elif storage_mode == "append-only":
             # Mode ajout uniquement : ignore les doublons
+            # Récupérer les IDs existants pour identifier les nouvelles
+            existing_ids = await db_manager.get_question_ids()
+            before_count = len(existing_ids)
+            
             stored_count = await store_questions_append_only(db_manager, questions_data, logger)
+            
+            # Identifier les nouvelles questions (celles qui ont été réellement ajoutées)
+            new_questions_ids = [q.question_id for q in questions_data if q.question_id not in existing_ids]
+            
+        execution_info.update({
+            'new_questions_count': len(new_questions_ids),
+            'new_questions_ids': new_questions_ids
+        })
         
         storage_time = datetime.now() - storage_start
         
@@ -217,32 +235,105 @@ async def main(
             execution_info['total_duration_so_far'] = total_time_so_far
             analyzer.set_execution_metadata(execution_info)
             
-            analysis_start = datetime.now()
-            logger.info("Démarrage de l'analyse des tendances...")
+            # Déterminer les questions à analyser selon l'analysis_scope
+            questions_to_analyze = None
+            if analysis_scope == "new-only":
+                if new_questions_ids:
+                    questions_to_analyze = new_questions_ids
+                    logger.info(f"🎯 Analyse limitée aux {len(new_questions_ids)} nouvelles questions")
+                else:
+                    logger.warning("⚠️ Aucune nouvelle question trouvée, analyse annulée")
+                    execution_info.update({
+                        'analysis_status': '⚠️ Annulée - Aucune nouvelle question',
+                        'analysis_scope': analysis_scope
+                    })
+                    logger.info("⏭️  Analyse annulée")
+                    questions_to_analyze = "skip"
+            else:
+                logger.info("🎯 Analyse de toutes les questions disponibles")
             
-            analysis_results = await analyzer.analyze_trends()
-            analysis_time = datetime.now() - analysis_start
+            if questions_to_analyze != "skip":
+                analysis_start = datetime.now()
+                logger.info("Démarrage de l'analyse des tendances...")
+                
+                # Passer les IDs des questions à analyser (None = toutes les questions)
+                analysis_results = await analyzer.analyze_trends(question_ids=questions_to_analyze)
+                analysis_time = datetime.now() - analysis_start
+                
+                analyzed_count = len(questions_to_analyze) if questions_to_analyze else "toutes"
+                execution_info.update({
+                    'analysis_duration': analysis_time.total_seconds(),
+                    'analysis_status': '✅ Terminé',
+                    'analysis_scope': analysis_scope,
+                    'analyzed_questions_count': analyzed_count
+                })
+                
+                logger.info(f"[OK] Analyse terminée en {analysis_time.total_seconds():.1f}s")
+                
+                # Sauvegarde des résultats d'analyse (sans visualisations)
+                logger.info("[SAVE] Sauvegarde des résultats...")
+                save_start = datetime.now()
+                await analyzer.save_results(analysis_results)
+                save_time = datetime.now() - save_start
+                
+                execution_info.update({
+                    'save_duration': save_time.total_seconds()
+                })
+                
+                logger.info(f"[OK] Sauvegarde terminée en {save_time.total_seconds():.1f}s")
+            else:
+                # Générer un rapport même si l'analyse est annulée
+                logger.info("[REPORT] Génération d'un rapport d'exécution...")
+                save_start = datetime.now()
+                
+                # Créer un résultat vide avec les informations d'exécution
+                empty_results = {
+                    'execution_info': execution_info,
+                    'analysis_skipped': True,
+                    'skip_reason': execution_info.get('analysis_skipped_reason', 'Aucune nouvelle question à analyser')
+                }
+                
+                await analyzer.save_results(empty_results)
+                save_time = datetime.now() - save_start
+                
+                execution_info.update({
+                    'save_duration': save_time.total_seconds()
+                })
+                
+                logger.info(f"[OK] Rapport d'exécution généré en {save_time.total_seconds():.1f}s")
+        else:
+            logger.info("⏭️  Analyse des données désactivée")
             
-            execution_info.update({
-                'analysis_duration': analysis_time.total_seconds(),
-                'analysis_status': '✅ Terminé'
-            })
+            # Modifier les informations d'exécution pour refléter que l'analyse est désactivée
+            execution_info['analysis_scope'] = 'disabled'
             
-            logger.info(f"[OK] Analyse terminée en {analysis_time.total_seconds():.1f}s")
-            
-            # Sauvegarde des résultats d'analyse (sans visualisations)
-            logger.info("[SAVE] Sauvegarde des résultats...")
+            # Générer un rapport même si l'analyse est désactivée
+            logger.info("[REPORT] Génération d'un rapport d'exécution...")
             save_start = datetime.now()
-            await analyzer.save_results(analysis_results)
+            
+            # Créer un DataAnalyzer pour générer le rapport
+            analyzer = DataAnalyzer(db_manager)
+            analyzer.set_execution_metadata(execution_info)
+            
+            # Créer un résultat vide avec les informations d'exécution
+            disabled_results = {
+                'execution_info': execution_info,
+                'analysis_disabled': True,
+                'skip_reason': 'Analyse désactivée par l\'utilisateur (--no-analysis)'
+            }
+            
+            await analyzer.save_results(disabled_results)
             save_time = datetime.now() - save_start
             
             execution_info.update({
-                'save_duration': save_time.total_seconds()
+                'save_duration': save_time.total_seconds(),
+                'analysis_status': '⏭️ Désactivée'
             })
             
-            logger.info(f"[OK] Sauvegarde terminée en {save_time.total_seconds():.1f}s")
-        else:
-            logger.info("⏭️  Analyse des données désactivée")
+            logger.info(f"[OK] Rapport d'exécution généré en {save_time.total_seconds():.1f}s")
+            execution_info.update({
+                'analysis_status': '⏭️ Désactivée'
+            })
         
         total_time = datetime.now() - start_time
         execution_info['total_duration'] = total_time.total_seconds()
@@ -317,6 +408,15 @@ def parse_arguments():
              "append-only: Ajoute seulement les nouvelles questions (ignore les doublons)"
     )
     
+    parser.add_argument(
+        "--analysis-scope",
+        choices=["all", "new-only"],
+        default="all",
+        help="Portée de l'analyse (défaut: all)\n"
+             "all: Analyse toutes les questions dans la base de données\n"
+             "new-only: Analyse seulement les questions nouvellement ajoutées/mises à jour"
+    )
+    
     return parser.parse_args()
 
 
@@ -330,5 +430,6 @@ if __name__ == "__main__":
         tags=args.tags,
         use_api=args.use_api,
         analyze_data=not args.no_analysis,
-        storage_mode=args.mode
+        storage_mode=args.mode,
+        analysis_scope=args.analysis_scope
     ))

@@ -238,9 +238,10 @@ python main.py [OPTIONS]
 | `--max-questions` | `-n` | int | 300 | Nombre max de questions à extraire |
 | `--tags` | `-t` | list | None | Tags à filtrer (ex: python javascript) |
 | `--use-api` | | flag | False | Utiliser l'API au lieu du scraping |
-| `--no-analysis` | | flag | False | Désactiver l'analyse des données |
+| `--no-analysis` | | flag | False | Désactiver complètement l'analyse des données |
 | `--log-level` | | choice | INFO | Niveau de logging (DEBUG/INFO/WARNING/ERROR) |
 | `--mode` | | choice | update | Mode de stockage (update/append-only) |
+| `--analysis-scope` | | choice | all | Portée de l'analyse (all/new-only) |
 
 ### Modes de stockage
 
@@ -259,6 +260,49 @@ python main.py --mode append-only
 - **Comportement** : Ajoute seulement les nouvelles questions, ignore les doublons
 - **Usage** : Enrichissement de la base, éviter les doublons
 - **Technique** : Filtre les IDs existants avant insertion
+
+### Portées d'analyse
+
+#### 🌐 Mode `all` (défaut)
+```bash
+python main.py --analysis-scope all
+```
+- **Comportement** : Analyse toutes les questions présentes dans la base de données
+- **Usage** : Analyse complète des tendances globales
+- **Technique** : Récupère et analyse toutes les questions stockées
+
+#### 🎯 Mode `new-only`
+```bash
+python main.py --analysis-scope new-only
+```
+- **Comportement** : Analyse seulement les questions nouvellement ajoutées/mises à jour
+- **Usage** : Analyse rapide des nouvelles tendances, optimisation des performances
+- **Technique** : Filtre et analyse uniquement les questions traitées lors de l'exécution courante
+- **Note** : Si aucune nouvelle question, l'analyse est automatiquement annulée
+
+#### 💡 Combinaisons utiles
+```bash
+# Ajout de nouvelles données + analyse complète
+python main.py --mode append-only --analysis-scope all
+
+# Ajout de nouvelles données + analyse des nouveautés seulement
+python main.py --mode append-only --analysis-scope new-only
+
+# Mise à jour + analyse des changements seulement
+python main.py --mode update --analysis-scope new-only
+
+# Collecte sans analyse immédiate (optimisation performance)
+python main.py --use-api -n 2000 --no-analysis
+```
+
+#### ⚠️ Mode d'analyse désactivé
+```bash
+python main.py --no-analysis
+```
+- **Comportement** : Effectue uniquement l'extraction et le stockage, aucune analyse
+- **Usage** : Collecte massive de données sans traitement immédiat
+- **Rapport** : Un rapport d'exécution est quand même généré avec le statut "Analyse désactivée"
+- **Note** : Permet d'optimiser les performances lors de collectes importantes
 
 ### 💡 Exemples d'utilisation
 
@@ -315,7 +359,31 @@ python main.py --log-level DEBUG -n 100
 python main.py --use-api -n 2500 --mode append-only
 ```
 
-#### 6. Workflows spécialisés
+#### 6. Modes d'analyse optimisés
+```bash
+# Collecte + analyse complète (défaut)
+python main.py --use-api -n 1000 --analysis-scope all
+
+# Collecte + analyse rapide des nouveautés seulement
+python main.py --use-api -n 1000 --analysis-scope new-only
+
+# Mode append-only + analyse des nouvelles questions
+python main.py --mode append-only --analysis-scope new-only -n 500
+
+# Mise à jour + analyse complète pour recalculer les tendances
+python main.py --mode update --analysis-scope all
+
+# Mode économe : collecte sans analyse immédiate
+python main.py --use-api -n 2000 --no-analysis
+# → Génère quand même un rapport d'exécution avec statut "Analyse désactivée"
+
+# Cas d'analyse annulée automatiquement
+python main.py --mode append-only --analysis-scope new-only -n 100
+# → Si aucune nouvelle question, l'analyse est annulée intelligemment
+# → Le rapport indique "Analyse annulée - Aucune nouvelle question"
+```
+
+#### 7. Workflows spécialisés
 ```bash
 # Collecte initiale massive
 python main.py --use-api -n 2500 --mode append-only --no-analysis
@@ -444,8 +512,9 @@ Le système d'analyse est composé de plusieurs modules spécialisés :
 
 #### 🔍 NLP Processor
 - **Preprocessing** : Nettoyage et normalisation des textes
-- **Keywords extraction** : TF-IDF pour identifier les termes importants
-- **Sentiment analysis** : Analyse du sentiment avec TextBlob
+- **Keywords extraction** : TF-IDF pour identifier les termes importants (titles, summaries, contenu combiné)
+- **Sentiment analysis** : Analyse du sentiment avec TextBlob (titles, summaries, contenu combiné)
+- **Content quality analysis** : Métriques de qualité du contenu (complétude, richesse technique, clarté)
 - **Vectorisation** : Préparation pour l'analyse de clustering
 
 #### 📈 Trend Analyzer
@@ -495,15 +564,44 @@ Le système d'analyse est composé de plusieurs modules spécialisés :
 ```python
 {
   "title_keywords": [
-    ["python", 0.058],        // Mots-clés avec scores TF-IDF
+    ["python", 0.058],        // Mots-clés des titres avec scores TF-IDF
     ["error", 0.048],
     ["function", 0.028]
+  ],
+  "summary_keywords": [
+    ["trying", 0.045],        // Mots-clés des résumés
+    ["understand", 0.038],
+    ["implement", 0.035]
+  ],
+  "combined_keywords": [      // Analyse du contenu complet (titre + résumé)
+    ["python", 0.062],
+    ["function", 0.041],
+    ["error", 0.038]
   ],
   "title_sentiment": {
     "positive": 443,
     "negative": 450,
     "neutral": 4107,
     "average": -0.0045        // Légèrement négatif (problèmes techniques)
+  },
+  "summary_sentiment": {      // Sentiment des résumés
+    "positive": 612,
+    "negative": 298,
+    "neutral": 4090,
+    "average": 0.0123         // Plus positif (explications détaillées)
+  },
+  "content_quality": {        // Nouvelle analyse de qualité
+    "summary_completeness": 78.5,     // % de questions avec résumé substantiel
+    "content_richness": {
+      "technical_word_ratio": 23.4,   // % de mots techniques
+      "avg_words_per_question": 42.8,
+      "technical_term_count": 1847
+    },
+    "technical_depth": 15.6,          // % de questions avec termes avancés
+    "question_clarity": {
+      "clear_questions_ratio": 67.8,  // % de questions bien structurées
+      "questions_with_context": 3387
+    }
   }
 }
 ```
@@ -512,9 +610,19 @@ Le système d'analyse est composé de plusieurs modules spécialisés :
 
 #### 📄 Rapport Markdown (`output/reports/`)
 - **Résumé exécutif** avec métriques clés
-- **Analyse détaillée** par catégorie
+- **Analyse détaillée** par catégorie (si l'analyse a été effectuée)
 - **Tableaux** des tendances et statistiques
 - **Recommandations** basées sur les données
+- **Génération systématique** : Un rapport est toujours généré, même si l'analyse est désactivée ou annulée
+
+#### 🔄 Statuts d'analyse dans les rapports
+- **✅ Analyse complète** : Toutes les sections d'analyse sont présentes
+- **❌ Analyse désactivée** : Rapport avec informations d'exécution uniquement
+  - Message : "Analyse désactivée par l'utilisateur (--no-analysis)"
+  - Suggestion : "Pour activer l'analyse, retirez l'option `--no-analysis`"
+- **⚠️ Analyse annulée** : Analyse intelligemment annulée pour optimiser les performances
+  - Message : "Aucune nouvelle question à analyser"
+  - Suggestion : "Utilisez `--analysis-scope all` pour forcer l'analyse de toutes les questions"
 
 #### 📊 Données JSON (`output/analysis/`)
 - **Format structuré** pour intégration
@@ -1115,8 +1223,3 @@ python run_tests.py
 ```
 
 ---
-
-**📄 Licence :** MIT  
-**👨‍💻 Auteur :** Pierre Mazard  
-**📅 Version :** 1.0.0 (Août 2025)  
-**🏷️ Repository :** [so-scrapper](https://github.com/pierre-mazard/so-scrapper)

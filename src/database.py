@@ -254,6 +254,44 @@ class DatabaseManager:
         
         return questions
     
+    async def get_questions_by_ids(self, question_ids: List[int]) -> List[Dict[str, Any]]:
+        """
+        Récupère les questions par leurs IDs.
+        
+        Args:
+            question_ids: Liste des IDs des questions à récupérer
+            
+        Returns:
+            Liste des questions correspondant aux IDs
+        """
+        if not question_ids:
+            return []
+            
+        questions_coll = self.motor_database[self.questions_collection]
+        
+        # Utiliser $in pour récupérer toutes les questions avec les IDs spécifiés
+        query = {"question_id": {"$in": question_ids}}
+        
+        cursor = questions_coll.find(query).sort("publication_date", -1)
+        questions = await cursor.to_list(length=len(question_ids))
+        
+        return questions
+    
+    async def get_question_ids(self) -> List[int]:
+        """
+        Récupère tous les IDs des questions existantes dans la base.
+        
+        Returns:
+            Liste des IDs des questions
+        """
+        questions_coll = self.motor_database[self.questions_collection]
+        
+        # Récupérer seulement le champ question_id de toutes les questions
+        cursor = questions_coll.find({}, {"question_id": 1, "_id": 0})
+        docs = await cursor.to_list(length=None)
+        
+        return [doc["question_id"] for doc in docs]
+
     async def get_questions_by_tags(self, tags: List[str]) -> List[Dict[str, Any]]:
         """Récupère les questions filtrées par tags."""
         return await self.get_questions(

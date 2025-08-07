@@ -176,6 +176,76 @@ class NLPProcessor:
             "average": np.mean(sentiments),
             "total": len(sentiments)
         }
+    
+    def analyze_content_quality(self, titles: List[str], summaries: List[str]) -> Dict[str, Any]:
+        """
+        Analyse la qualité du contenu basée sur les titres et résumés.
+        
+        Args:
+            titles: Liste des titres
+            summaries: Liste des résumés
+            
+        Returns:
+            Métriques de qualité du contenu
+        """
+        quality_metrics = {
+            'summary_completeness': 0,
+            'content_richness': {},
+            'technical_depth': 0,
+            'question_clarity': {}
+        }
+        
+        if not titles or not summaries:
+            return quality_metrics
+        
+        # 1. Complétude des résumés (% de questions avec résumé substantiel)
+        substantial_summaries = sum(1 for summary in summaries if len(summary.strip()) > 50)
+        quality_metrics['summary_completeness'] = substantial_summaries / len(summaries) * 100
+        
+        # 2. Richesse du contenu (ratio mots techniques vs mots communs)
+        technical_terms = {'function', 'class', 'method', 'variable', 'algorithm', 'library', 
+                          'framework', 'api', 'database', 'server', 'client', 'code', 'syntax',
+                          'error', 'exception', 'debug', 'compile', 'runtime', 'async', 'await'}
+        
+        combined_texts = [f"{title} {summary}".lower() for title, summary in zip(titles, summaries)]
+        total_words = sum(len(text.split()) for text in combined_texts)
+        technical_word_count = sum(sum(1 for word in text.split() if word in technical_terms) 
+                                 for text in combined_texts)
+        
+        quality_metrics['content_richness'] = {
+            'technical_word_ratio': technical_word_count / max(total_words, 1) * 100,
+            'avg_words_per_question': total_words / len(combined_texts),
+            'technical_term_count': technical_word_count
+        }
+        
+        # 3. Profondeur technique (présence de mots-clés avancés)
+        advanced_terms = {'performance', 'optimization', 'architecture', 'design pattern',
+                         'security', 'scalability', 'microservices', 'deployment', 'testing',
+                         'refactoring', 'best practices', 'clean code'}
+        
+        advanced_count = sum(sum(1 for term in advanced_terms if term in text.lower()) 
+                           for text in combined_texts)
+        quality_metrics['technical_depth'] = advanced_count / len(combined_texts) * 100
+        
+        # 4. Clarté des questions (présence de mots interrogatifs et structure)
+        question_indicators = ['how', 'what', 'why', 'when', 'where', 'which', 'can', 'should', 
+                             'is', 'are', 'does', 'do', 'will', 'would', '?']
+        
+        clear_questions = 0
+        for title, summary in zip(titles, summaries):
+            text = f"{title} {summary}".lower()
+            has_question_words = any(indicator in text for indicator in question_indicators)
+            has_code_context = any(keyword in text for keyword in ['code', 'function', 'method', 'class'])
+            
+            if has_question_words and has_code_context:
+                clear_questions += 1
+        
+        quality_metrics['question_clarity'] = {
+            'clear_questions_ratio': clear_questions / len(titles) * 100,
+            'questions_with_context': clear_questions
+        }
+        
+        return quality_metrics
 
 
 class TrendAnalyzer:
@@ -362,9 +432,12 @@ class DataAnalyzer:
         """
         self.execution_metadata = scraping_info
     
-    async def analyze_trends(self) -> Dict[str, Any]:
+    async def analyze_trends(self, question_ids: List[int] = None) -> Dict[str, Any]:
         """
         Effectue une analyse complète des tendances.
+        
+        Args:
+            question_ids: Liste des IDs de questions à analyser. Si None, analyse toutes les questions.
         
         Returns:
             Résultats d'analyse complets
@@ -374,14 +447,19 @@ class DataAnalyzer:
         
         try:
             # Récupération des données
-            self.logger.info("Questions extraites: Récupération des données depuis la base...")
-            questions = await self.db_manager.get_questions(limit=5000)
+            if question_ids is not None:
+                self.logger.info(f"Questions extraites: Récupération de {len(question_ids)} questions spécifiques...")
+                questions = await self.db_manager.get_questions_by_ids(question_ids)
+            else:
+                self.logger.info("Questions extraites: Récupération des données depuis la base...")
+                questions = await self.db_manager.get_questions()  # Pas de limite = toutes les questions
             
             if not questions:
                 self.logger.warning("⚠️ Aucune question trouvée pour l'analyse")
                 return {"error": "Aucune donnée disponible"}
             
-            self.logger.info(f"[OK] {len(questions)} questions récupérées pour l'analyse")
+            scope_info = f"spécifiques ({len(question_ids)} IDs)" if question_ids else "toutes disponibles"
+            self.logger.info(f"[OK] {len(questions)} questions récupérées pour l'analyse ({scope_info})")
             
             # Analyses principales
             results = {
@@ -459,23 +537,42 @@ class DataAnalyzer:
         titles = [q.get('title', '') for q in questions]
         summaries = [q.get('summary', '') for q in questions]
         
-        # Mots-clés des titres
-        title_keywords = self.nlp_processor.extract_keywords(titles, max_features=50)
+        # Texte combiné (titre + résumé) pour analyse globale
+        combined_texts = [f"{title} {summary}".strip() for title, summary in zip(titles, summaries)]
         
-        # Mots-clés des résumés
+        # Mots-clés séparés
+        title_keywords = self.nlp_processor.extract_keywords(titles, max_features=50)
         summary_keywords = self.nlp_processor.extract_keywords(summaries, max_features=50)
+        
+        # Mots-clés du contenu combiné (pour une vision globale)
+        combined_keywords = self.nlp_processor.extract_keywords(combined_texts, max_features=100)
         
         # Analyse de sentiment
         title_sentiment = self.nlp_processor.analyze_sentiment(titles)
         summary_sentiment = self.nlp_processor.analyze_sentiment(summaries)
+        combined_sentiment = self.nlp_processor.analyze_sentiment(combined_texts)
+        
+        # Nouvelle analyse de qualité du contenu
+        content_quality = self.nlp_processor.analyze_content_quality(titles, summaries)
+        
+        # Statistiques de longueur
+        title_lengths = [len(title) for title in titles if title]
+        summary_lengths = [len(summary) for summary in summaries if summary]
         
         return {
             'title_keywords': title_keywords[:20],
             'summary_keywords': summary_keywords[:20],
+            'combined_keywords': combined_keywords[:30],  # Plus de mots-clés pour le contenu complet
             'title_sentiment': title_sentiment,
             'summary_sentiment': summary_sentiment,
-            'average_title_length': np.mean([len(title) for title in titles if title]),
-            'average_summary_length': np.mean([len(summary) for summary in summaries if summary])
+            'combined_sentiment': combined_sentiment,
+            'content_quality': content_quality,  # Nouvelle métrique de qualité
+            'length_stats': {
+                'average_title_length': np.mean(title_lengths) if title_lengths else 0,
+                'average_summary_length': np.mean(summary_lengths) if summary_lengths else 0,
+                'title_word_count': np.mean([len(title.split()) for title in titles if title]) if titles else 0,
+                'summary_word_count': np.mean([len(summary.split()) for summary in summaries if summary]) if summaries else 0
+            }
         }
     
     async def _analyze_authors(self) -> Dict[str, Any]:
@@ -693,6 +790,45 @@ class DataAnalyzer:
             f.write(f"- **Questions demandées**: {exec_info.get('max_questions', 'N/A')}\n")
             f.write(f"- **Tags ciblés**: {', '.join(exec_info.get('target_tags', [])) if exec_info.get('target_tags') else 'Tous les tags'}\n")
             f.write(f"- **Mode d'extraction**: {exec_info.get('extraction_mode', 'N/A')}\n")
+            f.write(f"- **Mode de stockage**: {exec_info.get('storage_mode', 'N/A')}\n")
+            analysis_scope = exec_info.get('analysis_scope', 'N/A')
+            if analysis_scope == 'disabled':
+                f.write(f"- **Mode d'analyse**: ❌ Désactivé\n")
+            else:
+                f.write(f"- **Mode d'analyse**: {analysis_scope}\n")
+            
+            # Affichage des options d'exécution détaillées
+            f.write("\n### Options d'exécution utilisées\n\n")
+            options = []
+            
+            # Reconstruction de la commande équivalente
+            if exec_info.get('max_questions'):
+                options.append(f"--max-questions {exec_info['max_questions']}")
+            
+            if exec_info.get('target_tags'):
+                tags_str = ' '.join(exec_info['target_tags'])
+                options.append(f"--tags {tags_str}")
+            
+            if exec_info.get('extraction_mode') == 'API Stack Overflow':
+                options.append("--use-api")
+            
+            if exec_info.get('storage_mode') == 'append-only':
+                options.append("--mode append-only")
+            elif exec_info.get('storage_mode') == 'update':
+                options.append("--mode update (défaut)")
+            
+            if exec_info.get('analysis_scope') == 'new-only':
+                options.append("--analysis-scope new-only")
+            elif exec_info.get('analysis_scope') == 'all':
+                options.append("--analysis-scope all (défaut)")
+            elif exec_info.get('analysis_scope') == 'disabled':
+                options.append("--no-analysis")
+            
+            if options:
+                f.write(f"**Commande équivalente :** `python main.py {' '.join(options)}`\n\n")
+            else:
+                f.write("**Commande équivalente :** `python main.py` (paramètres par défaut)\n\n")
+            
             if 'total_duration' in exec_info:
                 f.write(f"- **⏱️ Temps total d'exécution**: {exec_info['total_duration']:.2f} secondes\n")
             f.write("\n")
@@ -755,6 +891,24 @@ class DataAnalyzer:
         """Écrit les informations de la phase d'analyse."""
         f.write("## 📊 PHASE 3: ANALYSE DES DONNÉES\n\n")
         
+        # Vérifier si l'analyse a été annulée ou désactivée
+        if results.get('analysis_skipped') or results.get('analysis_disabled'):
+            f.write("### ⚠️ Analyse non effectuée\n\n")
+            skip_reason = results.get('skip_reason', 'Raison inconnue')
+            
+            if results.get('analysis_skipped'):
+                f.write(f"**Statut**: Analyse annulée automatiquement\n\n")
+                f.write(f"**Raison**: {skip_reason}\n\n")
+                f.write("💡 *L'analyse a été intelligemment annulée pour optimiser les performances. ")
+                f.write("Utilisez `--analysis-scope all` pour forcer l'analyse de toutes les questions.*\n\n")
+            elif results.get('analysis_disabled'):
+                f.write(f"**Statut**: Analyse désactivée par l'utilisateur\n\n")
+                f.write(f"**Raison**: {skip_reason}\n\n")
+                f.write("💡 *Pour activer l'analyse, retirez l'option `--no-analysis` de votre commande.*\n\n")
+            
+            return
+        
+        # Analyse normale
         if 'analysis_metadata' in results:
             meta = results['analysis_metadata']
             f.write("### Configuration de l'analyse\n\n")
@@ -767,6 +921,11 @@ class DataAnalyzer:
     
     def _write_detailed_analysis_results(self, f, results: Dict[str, Any]) -> None:
         """Écrit les résultats détaillés de l'analyse."""
+        # Vérifier si l'analyse a été annulée ou désactivée
+        if results.get('analysis_skipped') or results.get('analysis_disabled'):
+            # Ne pas afficher la section des résultats détaillés si pas d'analyse
+            return
+        
         f.write("## 📈 RÉSULTATS D'ANALYSE DÉTAILLÉS\n\n")
         
         # Tags tendances
@@ -808,11 +967,34 @@ class DataAnalyzer:
                     significance = "Très important" if score > 0.5 else "Important" if score > 0.2 else "Modéré" if score > 0.1 else "Faible"
                     f.write(f"| {i} | `{keyword}` | {score:.3f} | {significance} |\n")
                 f.write("\n")
+            
+            # Mots-clés des résumés (nouveau) - toujours afficher la section
+            f.write("#### 📄 Mots-clés des Résumés (TF-IDF)\n\n")
+            if 'summary_keywords' in content and content['summary_keywords']:
+                f.write("| Rang | Mot-clé | Score TF-IDF | Signification |\n")
+                f.write("|------|---------|--------------|---------------|\n")
+                for i, (keyword, score) in enumerate(content['summary_keywords'][:15], 1):
+                    significance = "Très important" if score > 0.5 else "Important" if score > 0.2 else "Modéré" if score > 0.1 else "Faible"
+                    f.write(f"| {i} | `{keyword}` | {score:.3f} | {significance} |\n")
+                f.write("\n")
+            else:
+                f.write("❌ **Pas de mots-clés extraits des résumés**\n\n")
+                f.write("💡 **Raison possible** : Les questions analysées ne contiennent pas de résumés substantiels (>50 caractères), ou les résumés sont trop similaires pour générer des mots-clés distinctifs.\n\n")
+            
+            # Mots-clés du contenu combiné (nouveau)
+            if 'combined_keywords' in content and content['combined_keywords']:
+                f.write("#### 🔄 Mots-clés du Contenu Complet (Titres + Résumés)\n\n")
+                f.write("| Rang | Mot-clé | Score TF-IDF | Signification |\n")
+                f.write("|------|---------|--------------|---------------|\n")
+                for i, (keyword, score) in enumerate(content['combined_keywords'][:20], 1):
+                    significance = "Très important" if score > 0.5 else "Important" if score > 0.2 else "Modéré" if score > 0.1 else "Faible"
+                    f.write(f"| {i} | `{keyword}` | {score:.3f} | {significance} |\n")
+                f.write("\n")
                 
                 # Explication des scores TF-IDF
                 f.write("💡 **Note**: Les scores TF-IDF mesurent l'importance statistique des mots dans le corpus. Un score plus élevé indique un terme plus significatif et distinctif.\n\n")
             
-            # Analyse de sentiment
+            # Analyse de sentiment des titres
             if 'title_sentiment' in content:
                 f.write("#### 😊 Analyse de Sentiment des Titres\n\n")
                 sent = content['title_sentiment']
@@ -829,9 +1011,102 @@ class DataAnalyzer:
                     f.write(f"| 😞 **Négatif** | {sent.get('negative', 0)} | {neg_pct:.1f}% |\n")
                     f.write(f"| 📊 **Score moyen** | - | {sent.get('average', 0):.3f} |\n")
                     f.write("\n")
+            
+            # Analyse de sentiment des résumés (nouveau) - toujours afficher la section
+            f.write("#### 📄 Analyse de Sentiment des Résumés\n\n")
+            if 'summary_sentiment' in content and content['summary_sentiment'].get('total', 0) > 0:
+                sent = content['summary_sentiment']
+                total = sent.get('total', 1)
+                if total > 0:
+                    pos_pct = (sent.get('positive', 0) / total) * 100
+                    neu_pct = (sent.get('neutral', 0) / total) * 100
+                    neg_pct = (sent.get('negative', 0) / total) * 100
+                    
+                    f.write("| Sentiment | Nombre | Pourcentage |\n")
+                    f.write("|-----------|--------|--------------|\n")
+                    f.write(f"| 😊 **Positif** | {sent.get('positive', 0)} | {pos_pct:.1f}% |\n")
+                    f.write(f"| 😐 **Neutre** | {sent.get('neutral', 0)} | {neu_pct:.1f}% |\n")
+                    f.write(f"| 😞 **Négatif** | {sent.get('negative', 0)} | {neg_pct:.1f}% |\n")
+                    f.write(f"| 📊 **Score moyen** | - | {sent.get('average', 0):.3f} |\n")
+                    f.write("\n")
+            else:
+                f.write("❌ **Pas d'analyse de sentiment disponible pour les résumés**\n\n")
+                f.write("💡 **Raison possible** : Les questions analysées ne contiennent pas de résumés substantiels pour effectuer une analyse de sentiment fiable.\n\n")
+            
+            # Analyse de sentiment combinée (nouveau)
+            if 'combined_sentiment' in content and content['combined_sentiment'].get('total', 0) > 0:
+                f.write("#### 🔄 Analyse de Sentiment du Contenu Complet\n\n")
+                sent = content['combined_sentiment']
+                total = sent.get('total', 1)
+                if total > 0:
+                    pos_pct = (sent.get('positive', 0) / total) * 100
+                    neu_pct = (sent.get('neutral', 0) / total) * 100
+                    neg_pct = (sent.get('negative', 0) / total) * 100
+                    
+                    f.write("| Sentiment | Nombre | Pourcentage |\n")
+                    f.write("|-----------|--------|--------------|\n")
+                    f.write(f"| 😊 **Positif** | {sent.get('positive', 0)} | {pos_pct:.1f}% |\n")
+                    f.write(f"| 😐 **Neutre** | {sent.get('neutral', 0)} | {neu_pct:.1f}% |\n")
+                    f.write(f"| 😞 **Négatif** | {sent.get('negative', 0)} | {neg_pct:.1f}% |\n")
+                    f.write(f"| 📊 **Score moyen** | - | {sent.get('average', 0):.3f} |\n")
+                    f.write("\n")
                     
                     # Explication du score de sentiment
                     f.write("💡 **Note**: Le score de sentiment varie de -1 (très négatif) à +1 (très positif). Un score proche de 0 indique un contenu neutre/technique.\n\n")
+            
+            # Analyse de qualité du contenu (nouveau)
+            if 'content_quality' in content:
+                f.write("#### 🎯 Analyse de Qualité du Contenu\n\n")
+                quality = content['content_quality']
+                
+                f.write("**📊 Métriques de qualité globales :**\n\n")
+                f.write("| Métrique | Valeur | Interprétation |\n")
+                f.write("|----------|--------|----------------|\n")
+                
+                # Complétude des résumés
+                completeness = quality.get('summary_completeness', 0)
+                completeness_desc = "Excellent" if completeness > 80 else "Bon" if completeness > 60 else "Modéré" if completeness > 40 else "Faible"
+                f.write(f"| 📝 **Complétude des résumés** | {completeness:.1f}% | {completeness_desc} |\n")
+                
+                # Richesse technique
+                if 'content_richness' in quality:
+                    richness = quality['content_richness']
+                    tech_ratio = richness.get('technical_word_ratio', 0)
+                    tech_desc = "Très technique" if tech_ratio > 30 else "Technique" if tech_ratio > 20 else "Modérément technique" if tech_ratio > 10 else "Peu technique"
+                    f.write(f"| 🔧 **Richesse technique** | {tech_ratio:.1f}% | {tech_desc} |\n")
+                    
+                    avg_words = richness.get('avg_words_per_question', 0)
+                    word_desc = "Très détaillé" if avg_words > 100 else "Détaillé" if avg_words > 50 else "Standard" if avg_words > 30 else "Concis"
+                    f.write(f"| 📊 **Mots par question** | {avg_words:.1f} | {word_desc} |\n")
+                
+                # Profondeur technique
+                depth = quality.get('technical_depth', 0)
+                depth_desc = "Très avancé" if depth > 20 else "Avancé" if depth > 10 else "Intermédiaire" if depth > 5 else "Basique"
+                f.write(f"| 🎓 **Profondeur technique** | {depth:.1f}% | {depth_desc} |\n")
+                
+                # Clarté des questions
+                if 'question_clarity' in quality:
+                    clarity = quality['question_clarity']
+                    clear_ratio = clarity.get('clear_questions_ratio', 0)
+                    clear_desc = "Excellent" if clear_ratio > 80 else "Bon" if clear_ratio > 60 else "Modéré" if clear_ratio > 40 else "Améliorable"
+                    f.write(f"| 💡 **Clarté des questions** | {clear_ratio:.1f}% | {clear_desc} |\n")
+                
+                f.write("\n")
+            
+            # Statistiques de longueur (améliorées)
+            if 'length_stats' in content:
+                length_stats = content['length_stats']
+                f.write("#### 📏 Statistiques de Longueur du Contenu\n\n")
+                f.write("| Type de contenu | Longueur moyenne | Mots moyens |\n")
+                f.write("|-----------------|------------------|-------------|\n")
+                
+                if length_stats.get('average_title_length', 0) > 0:
+                    f.write(f"| 🏷️ **Titres** | {length_stats['average_title_length']:.1f} caractères | {length_stats.get('title_word_count', 0):.1f} mots |\n")
+                
+                if length_stats.get('average_summary_length', 0) > 0:
+                    f.write(f"| 📄 **Résumés** | {length_stats['average_summary_length']:.1f} caractères | {length_stats.get('summary_word_count', 0):.1f} mots |\n")
+                
+                f.write("\n")
         
         # Analyse des auteurs
         if 'author_analysis' in results and 'top_authors' in results['author_analysis']:

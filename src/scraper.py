@@ -483,10 +483,25 @@ class StackOverflowScraper:
         """Convertit une réponse de l'API en QuestionData."""
         owner = api_question.get('owner', {})
         
+        # Récupérer le contenu - l'API retourne 'body' (HTML) avec le filtre 'withbody'
+        body_content = api_question.get('body', '')
+        # Limiter la taille du résumé et nettoyer le HTML basique
+        if body_content:
+            # Nettoyage basique du HTML (enlever les balises les plus communes)
+            import re
+            # Enlever les balises HTML courantes tout en gardant le contenu
+            clean_content = re.sub(r'<[^>]+>', '', body_content)
+            # Nettoyer les entités HTML
+            clean_content = clean_content.replace('&lt;', '<').replace('&gt;', '>').replace('&amp;', '&')
+            # Limiter à 500 caractères
+            summary = clean_content[:500] + '...' if len(clean_content) > 500 else clean_content
+        else:
+            summary = ''
+        
         return QuestionData(
             title=api_question.get('title', ''),
             url=api_question.get('link', ''),
-            summary=api_question.get('body_markdown', '')[:500] + '...' if len(api_question.get('body_markdown', '')) > 500 else api_question.get('body_markdown', ''),
+            summary=summary,
             tags=api_question.get('tags', []),
             author_name=owner.get('display_name', 'Unknown'),
             author_reputation=owner.get('reputation', 0),
