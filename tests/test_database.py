@@ -187,16 +187,18 @@ class TestDatabaseManager:
         mock_questions_coll.update_one = AsyncMock()
         
         with patch.object(db_manager, '_store_author', new_callable=AsyncMock):
-            stored_count = await db_manager.store_questions(sample_questions)
+            stored_result = await db_manager.store_questions(sample_questions)
         
-        assert stored_count == len(sample_questions)
+        assert isinstance(stored_result, dict)
+        assert stored_result['questions_stored'] == len(sample_questions)
         assert mock_questions_coll.update_one.call_count == len(sample_questions)
     
     @pytest.mark.asyncio
     async def test_store_questions_empty_list(self, db_manager):
         """Test le stockage d'une liste vide."""
-        stored_count = await db_manager.store_questions([])
-        assert stored_count == 0
+        stored_result = await db_manager.store_questions([])
+        assert isinstance(stored_result, dict)
+        assert stored_result['questions_stored'] == 0
     
     @pytest.mark.asyncio
     async def test_store_author(self, db_manager, sample_questions):

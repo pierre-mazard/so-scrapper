@@ -220,10 +220,12 @@ class TestDataAnalyzer:
     async def test_analyze_content(self, data_analyzer, sample_db_questions):
         """Test l'analyse du contenu."""
         with patch.object(data_analyzer.nlp_processor, 'extract_keywords') as mock_keywords, \
-             patch.object(data_analyzer.nlp_processor, 'analyze_sentiment') as mock_sentiment:
+             patch.object(data_analyzer.nlp_processor, 'analyze_sentiment') as mock_sentiment, \
+             patch.object(data_analyzer.nlp_processor, 'analyze_content_quality') as mock_quality:
             
             mock_keywords.return_value = [("python", 0.8), ("javascript", 0.6)]
             mock_sentiment.return_value = {"positive": 2, "negative": 0, "neutral": 0}
+            mock_quality.return_value = {"technical_depth": 50.0}
             
             content_analysis = await data_analyzer._analyze_content(sample_db_questions)
             
@@ -231,8 +233,9 @@ class TestDataAnalyzer:
             assert "summary_keywords" in content_analysis
             assert "title_sentiment" in content_analysis
             assert "summary_sentiment" in content_analysis
-            assert "average_title_length" in content_analysis
-            assert "average_summary_length" in content_analysis
+            assert "length_stats" in content_analysis
+            assert "average_title_length" in content_analysis["length_stats"]
+            assert "average_summary_length" in content_analysis["length_stats"]
     
     @pytest.mark.asyncio
     async def test_analyze_authors(self, data_analyzer, mock_db_manager):
