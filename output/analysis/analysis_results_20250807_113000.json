@@ -1,0 +1,891 @@
+{
+  "execution_info": {
+    "start_time": "2025-08-07T11:29:29.368767",
+    "max_questions": 2500,
+    "target_tags": [],
+    "extraction_mode": "API Stack Overflow",
+    "storage_mode": "update",
+    "scraping_duration": 14.998927,
+    "questions_extracted": 2500,
+    "extraction_rate": 166.6785897417862,
+    "scraping_status": "✅ Terminé",
+    "unique_authors": 2295,
+    "unique_tags": 3022,
+    "storage_duration": 5.119667,
+    "questions_stored": 2500,
+    "questions_attempted": 2500,
+    "authors_stored": 2295,
+    "storage_rate": 488.31300942033926,
+    "storage_status": "✅ Terminé",
+    "total_duration_so_far": 23.924911,
+    "analysis_duration": 4.162925,
+    "analysis_status": "✅ Terminé"
+  },
+  "analysis_metadata": {
+    "analysis_date": "2025-08-07T11:29:56.319842",
+    "total_questions": 5000,
+    "date_range": {
+      "start": "2025-06-14T00:22:23",
+      "end": "2025-08-07T11:26:54"
+    },
+    "duration": 4.152917
+  },
+  "tag_trends": {
+    "trending_tags": [
+      {
+        "tag": "r",
+        "total_questions": 80,
+        "last_week": 60,
+        "last_month": 79,
+        "last_quarter": 80,
+        "last_year": 80,
+        "growth_rate": 7800.0
+      },
+      {
+        "tag": "swift",
+        "total_questions": 60,
+        "last_week": 39,
+        "last_month": 59,
+        "last_quarter": 60,
+        "last_year": 60,
+        "growth_rate": 5800.0
+      },
+      {
+        "tag": "c",
+        "total_questions": 54,
+        "last_week": 36,
+        "last_month": 53,
+        "last_quarter": 54,
+        "last_year": 54,
+        "growth_rate": 5200.0
+      },
+      {
+        "tag": ".net",
+        "total_questions": 39,
+        "last_week": 25,
+        "last_month": 38,
+        "last_quarter": 39,
+        "last_year": 39,
+        "growth_rate": 3700.0
+      },
+      {
+        "tag": "kotlin",
+        "total_questions": 36,
+        "last_week": 30,
+        "last_month": 35,
+        "last_quarter": 36,
+        "last_year": 36,
+        "growth_rate": 3400.0
+      },
+      {
+        "tag": "powershell",
+        "total_questions": 29,
+        "last_week": 18,
+        "last_month": 28,
+        "last_quarter": 29,
+        "last_year": 29,
+        "growth_rate": 2700.0
+      },
+      {
+        "tag": "c++",
+        "total_questions": 133,
+        "last_week": 95,
+        "last_month": 128,
+        "last_quarter": 133,
+        "last_year": 133,
+        "growth_rate": 2460.0
+      },
+      {
+        "tag": "ios",
+        "total_questions": 101,
+        "last_week": 74,
+        "last_month": 97,
+        "last_quarter": 101,
+        "last_year": 101,
+        "growth_rate": 2325.0
+      },
+      {
+        "tag": "flutter",
+        "total_questions": 71,
+        "last_week": 51,
+        "last_month": 68,
+        "last_quarter": 71,
+        "last_year": 71,
+        "growth_rate": 2166.666666666667
+      },
+      {
+        "tag": "maui",
+        "total_questions": 23,
+        "last_week": 16,
+        "last_month": 22,
+        "last_quarter": 23,
+        "last_year": 23,
+        "growth_rate": 2100.0
+      },
+      {
+        "tag": "visual-studio",
+        "total_questions": 21,
+        "last_week": 14,
+        "last_month": 20,
+        "last_quarter": 21,
+        "last_year": 21,
+        "growth_rate": 1900.0
+      },
+      {
+        "tag": "xcode",
+        "total_questions": 19,
+        "last_week": 15,
+        "last_month": 18,
+        "last_quarter": 19,
+        "last_year": 19,
+        "growth_rate": 1700.0
+      },
+      {
+        "tag": "blazor",
+        "total_questions": 19,
+        "last_week": 16,
+        "last_month": 18,
+        "last_quarter": 19,
+        "last_year": 19,
+        "growth_rate": 1700.0
+      },
+      {
+        "tag": "kubernetes",
+        "total_questions": 18,
+        "last_week": 13,
+        "last_month": 17,
+        "last_quarter": 18,
+        "last_year": 18,
+        "growth_rate": 1600.0
+      },
+      {
+        "tag": "android",
+        "total_questions": 122,
+        "last_week": 85,
+        "last_month": 115,
+        "last_quarter": 122,
+        "last_year": 122,
+        "growth_rate": 1542.857142857143
+      },
+      {
+        "tag": "rest",
+        "total_questions": 15,
+        "last_week": 6,
+        "last_month": 14,
+        "last_quarter": 15,
+        "last_year": 15,
+        "growth_rate": 1300.0
+      },
+      {
+        "tag": "docker-compose",
+        "total_questions": 14,
+        "last_week": 9,
+        "last_month": 13,
+        "last_quarter": 14,
+        "last_year": 14,
+        "growth_rate": 1200.0
+      },
+      {
+        "tag": "maven",
+        "total_questions": 13,
+        "last_week": 10,
+        "last_month": 12,
+        "last_quarter": 13,
+        "last_year": 13,
+        "growth_rate": 1100.0
+      },
+      {
+        "tag": "qt",
+        "total_questions": 13,
+        "last_week": 9,
+        "last_month": 12,
+        "last_quarter": 13,
+        "last_year": 13,
+        "growth_rate": 1100.0
+      },
+      {
+        "tag": "asp.net-core",
+        "total_questions": 25,
+        "last_week": 17,
+        "last_month": 23,
+        "last_quarter": 25,
+        "last_year": 25,
+        "growth_rate": 1050.0
+      }
+    ],
+    "top_tags": [
+      {
+        "tag": "python",
+        "total_questions": 1857,
+        "last_week": 241,
+        "last_month": 1020,
+        "last_quarter": 1857,
+        "last_year": 1857,
+        "growth_rate": 21.863799283154123
+      },
+      {
+        "tag": "javascript",
+        "total_questions": 854,
+        "last_week": 114,
+        "last_month": 471,
+        "last_quarter": 854,
+        "last_year": 854,
+        "growth_rate": 22.97650130548303
+      },
+      {
+        "tag": "html",
+        "total_questions": 202,
+        "last_week": 58,
+        "last_month": 128,
+        "last_quarter": 202,
+        "last_year": 202,
+        "growth_rate": 72.97297297297297
+      },
+      {
+        "tag": "reactjs",
+        "total_questions": 174,
+        "last_week": 63,
+        "last_month": 125,
+        "last_quarter": 174,
+        "last_year": 174,
+        "growth_rate": 155.10204081632654
+      },
+      {
+        "tag": "c#",
+        "total_questions": 144,
+        "last_week": 107,
+        "last_month": 144,
+        "last_quarter": 144,
+        "last_year": 144,
+        "growth_rate": 0
+      },
+      {
+        "tag": "c++",
+        "total_questions": 133,
+        "last_week": 95,
+        "last_month": 128,
+        "last_quarter": 133,
+        "last_year": 133,
+        "growth_rate": 2460.0
+      },
+      {
+        "tag": "css",
+        "total_questions": 131,
+        "last_week": 44,
+        "last_month": 96,
+        "last_quarter": 131,
+        "last_year": 131,
+        "growth_rate": 174.28571428571428
+      },
+      {
+        "tag": "java",
+        "total_questions": 124,
+        "last_week": 96,
+        "last_month": 124,
+        "last_quarter": 124,
+        "last_year": 124,
+        "growth_rate": 0
+      },
+      {
+        "tag": "android",
+        "total_questions": 122,
+        "last_week": 85,
+        "last_month": 115,
+        "last_quarter": 122,
+        "last_year": 122,
+        "growth_rate": 1542.857142857143
+      },
+      {
+        "tag": "pandas",
+        "total_questions": 121,
+        "last_week": 10,
+        "last_month": 61,
+        "last_quarter": 121,
+        "last_year": 121,
+        "growth_rate": 1.6666666666666667
+      },
+      {
+        "tag": "typescript",
+        "total_questions": 120,
+        "last_week": 55,
+        "last_month": 90,
+        "last_quarter": 120,
+        "last_year": 120,
+        "growth_rate": 200.0
+      },
+      {
+        "tag": "ios",
+        "total_questions": 101,
+        "last_week": 74,
+        "last_month": 97,
+        "last_quarter": 101,
+        "last_year": 101,
+        "growth_rate": 2325.0
+      },
+      {
+        "tag": "node.js",
+        "total_questions": 99,
+        "last_week": 37,
+        "last_month": 68,
+        "last_quarter": 99,
+        "last_year": 99,
+        "growth_rate": 119.35483870967742
+      },
+      {
+        "tag": "python-3.x",
+        "total_questions": 85,
+        "last_week": 14,
+        "last_month": 45,
+        "last_quarter": 85,
+        "last_year": 85,
+        "growth_rate": 12.5
+      },
+      {
+        "tag": "django",
+        "total_questions": 81,
+        "last_week": 21,
+        "last_month": 57,
+        "last_quarter": 81,
+        "last_year": 81,
+        "growth_rate": 137.5
+      },
+      {
+        "tag": "r",
+        "total_questions": 80,
+        "last_week": 60,
+        "last_month": 79,
+        "last_quarter": 80,
+        "last_year": 80,
+        "growth_rate": 7800.0
+      },
+      {
+        "tag": "react-native",
+        "total_questions": 78,
+        "last_week": 42,
+        "last_month": 62,
+        "last_quarter": 78,
+        "last_year": 78,
+        "growth_rate": 287.5
+      },
+      {
+        "tag": "angular",
+        "total_questions": 75,
+        "last_week": 40,
+        "last_month": 60,
+        "last_quarter": 75,
+        "last_year": 75,
+        "growth_rate": 300.0
+      },
+      {
+        "tag": "flutter",
+        "total_questions": 71,
+        "last_week": 51,
+        "last_month": 68,
+        "last_quarter": 71,
+        "last_year": 71,
+        "growth_rate": 2166.666666666667
+      },
+      {
+        "tag": "next.js",
+        "total_questions": 68,
+        "last_week": 33,
+        "last_month": 52,
+        "last_quarter": 68,
+        "last_year": 68,
+        "growth_rate": 225.0
+      }
+    ],
+    "analysis_date": "2025-08-07T11:29:56.328833"
+  },
+  "temporal_patterns": {
+    "hourly_patterns": {
+      "votes_count": {
+        "0": 135,
+        "1": 132,
+        "2": 103,
+        "3": 132,
+        "4": 98,
+        "5": 125,
+        "6": 124,
+        "7": 154,
+        "8": 179,
+        "9": 255,
+        "10": 258,
+        "11": 289,
+        "12": 266,
+        "13": 259,
+        "14": 245,
+        "15": 293,
+        "16": 295,
+        "17": 304,
+        "18": 277,
+        "19": 264,
+        "20": 199,
+        "21": 224,
+        "22": 199,
+        "23": 191
+      },
+      "votes_mean": {
+        "0": 0.21,
+        "1": 0.24,
+        "2": 0.28,
+        "3": -0.12,
+        "4": 0.23,
+        "5": 0.11,
+        "6": 0.12,
+        "7": 0.29,
+        "8": 0.01,
+        "9": 0.05,
+        "10": 0.23,
+        "11": 0.25,
+        "12": 0.22,
+        "13": 0.02,
+        "14": 0.22,
+        "15": 0.27,
+        "16": 0.21,
+        "17": 0.09,
+        "18": 0.28,
+        "19": 0.13,
+        "20": 0.44,
+        "21": 0.27,
+        "22": 0.19,
+        "23": 0.09
+      },
+      "views_mean": {
+        "0": 67.0,
+        "1": 69.05,
+        "2": 103.59,
+        "3": 62.94,
+        "4": 77.46,
+        "5": 63.57,
+        "6": 62.1,
+        "7": 68.84,
+        "8": 60.12,
+        "9": 65.17,
+        "10": 64.63,
+        "11": 61.53,
+        "12": 64.65,
+        "13": 73.28,
+        "14": 59.36,
+        "15": 64.26,
+        "16": 58.97,
+        "17": 59.12,
+        "18": 63.45,
+        "19": 61.73,
+        "20": 67.3,
+        "21": 56.38,
+        "22": 69.83,
+        "23": 59.58
+      },
+      "answers_mean": {
+        "0": 0.71,
+        "1": 0.86,
+        "2": 0.79,
+        "3": 0.74,
+        "4": 0.68,
+        "5": 0.9,
+        "6": 0.62,
+        "7": 0.69,
+        "8": 0.62,
+        "9": 0.71,
+        "10": 0.78,
+        "11": 0.64,
+        "12": 0.69,
+        "13": 0.7,
+        "14": 0.67,
+        "15": 0.75,
+        "16": 0.73,
+        "17": 0.59,
+        "18": 0.67,
+        "19": 0.67,
+        "20": 0.68,
+        "21": 0.65,
+        "22": 0.79,
+        "23": 0.59
+      }
+    },
+    "daily_patterns": {
+      "votes_count": {
+        "0": 676,
+        "1": 852,
+        "2": 1139,
+        "3": 876,
+        "4": 664,
+        "5": 380,
+        "6": 413
+      },
+      "votes_mean": {
+        "0": 0.17,
+        "1": 0.2,
+        "2": 0.15,
+        "3": 0.09,
+        "4": 0.29,
+        "5": 0.2,
+        "6": 0.24
+      },
+      "views_mean": {
+        "0": 65.6,
+        "1": 63.73,
+        "2": 60.3,
+        "3": 57.73,
+        "4": 65.25,
+        "5": 76.59,
+        "6": 78.88
+      },
+      "answers_mean": {
+        "0": 0.74,
+        "1": 0.72,
+        "2": 0.63,
+        "3": 0.66,
+        "4": 0.7,
+        "5": 0.81,
+        "6": 0.75
+      }
+    },
+    "monthly_patterns": {
+      "votes_count": {
+        "6": 794,
+        "7": 2333,
+        "8": 1873
+      },
+      "votes_mean": {
+        "6": 0.47,
+        "7": 0.25,
+        "8": -0.02
+      },
+      "views_mean": {
+        "6": 83.57,
+        "7": 67.48,
+        "8": 52.92
+      },
+      "answers_mean": {
+        "6": 0.88,
+        "7": 0.77,
+        "8": 0.53
+      }
+    },
+    "peak_hour": 17,
+    "peak_day": 2,
+    "total_questions_analyzed": 5000
+  },
+  "content_analysis": {
+    "title_keywords": [
+      [
+        "using",
+        0.06442624747971742
+      ],
+      [
+        "python",
+        0.05524660069425159
+      ],
+      [
+        "error",
+        0.049634344426423956
+      ],
+      [
+        "file",
+        0.038936344654591344
+      ],
+      [
+        "function",
+        0.027452245573203447
+      ],
+      [
+        "data",
+        0.024894856945766392
+      ],
+      [
+        "value",
+        0.02410675692645808
+      ],
+      [
+        "use",
+        0.022150230225699754
+      ],
+      [
+        "get",
+        0.020887636049754
+      ],
+      [
+        "app",
+        0.020583080319799562
+      ],
+      [
+        "work",
+        0.01922458945269524
+      ],
+      [
+        "code",
+        0.018190144200875
+      ],
+      [
+        "custom",
+        0.017433775855204843
+      ],
+      [
+        "api",
+        0.017323362164464392
+      ],
+      [
+        "working",
+        0.016803395969511845
+      ],
+      [
+        "type",
+        0.0164044417098456
+      ],
+      [
+        "issue",
+        0.016342127942552062
+      ],
+      [
+        "object",
+        0.015489529242518407
+      ],
+      [
+        "react",
+        0.015168332662033646
+      ],
+      [
+        "multiple",
+        0.014813698657808197
+      ]
+    ],
+    "summary_keywords": [],
+    "title_sentiment": {
+      "positive": 456,
+      "negative": 449,
+      "neutral": 4095,
+      "average": -0.0031510400340400346,
+      "total": 5000
+    },
+    "summary_sentiment": {
+      "positive": 0,
+      "negative": 0,
+      "neutral": 0,
+      "average": 0
+    },
+    "average_title_length": 68.554,
+    "average_summary_length": null
+  },
+  "author_analysis": {
+    "top_authors": [
+      {
+        "_id": "689378e6c18f16c6bf15c67d",
+        "author_name": "Aadvik",
+        "first_seen": "2025-08-06 15:46:46.165000",
+        "last_seen": "2025-08-07 09:29:50.037000",
+        "profile_url": "https://stackoverflow.com/users/27596369/aadvik",
+        "question_count": 21,
+        "reputation": 628
+      },
+      {
+        "_id": "689378e3c18f16c6bf15be01",
+        "author_name": "Joe J",
+        "first_seen": "2025-08-06 15:46:43.148000",
+        "last_seen": "2025-08-07 09:29:52.069000",
+        "profile_url": "https://stackoverflow.com/users/25493371/joe-j",
+        "question_count": 21,
+        "reputation": 1073
+      },
+      {
+        "_id": "689378e4c18f16c6bf15c27e",
+        "author_name": "Enrico",
+        "first_seen": "2025-08-06 15:46:44.705000",
+        "last_seen": "2025-08-07 09:29:50.890000",
+        "profile_url": "https://stackoverflow.com/users/5201985/enrico",
+        "question_count": 21,
+        "reputation": 6590
+      },
+      {
+        "_id": "689378e4c18f16c6bf15c094",
+        "author_name": "einpoklum",
+        "first_seen": "2025-08-06 15:46:44.045000",
+        "last_seen": "2025-08-07 09:29:50.639000",
+        "profile_url": "https://stackoverflow.com/users/1593077/einpoklum",
+        "question_count": 18,
+        "reputation": 135695
+      },
+      {
+        "_id": "689378e4c18f16c6bf15c2c7",
+        "author_name": "Simon Ferndriger",
+        "first_seen": "2025-08-06 15:46:44.801000",
+        "last_seen": "2025-08-07 09:29:51.610000",
+        "profile_url": "https://stackoverflow.com/users/1612142/simon-ferndriger",
+        "question_count": 16,
+        "reputation": 5098
+      },
+      {
+        "_id": "689378e5c18f16c6bf15c4b2",
+        "author_name": "Daniel",
+        "first_seen": "2025-08-06 15:46:45.455000",
+        "last_seen": "2025-08-07 09:29:52.158000",
+        "profile_url": "https://stackoverflow.com/users/1107657/daniel",
+        "question_count": 15,
+        "reputation": 904
+      },
+      {
+        "_id": "689378e8c18f16c6bf15cc33",
+        "author_name": "Gary",
+        "first_seen": "2025-08-06 15:46:48.264000",
+        "last_seen": "2025-08-07 09:29:51.814000",
+        "profile_url": "https://stackoverflow.com/users/30827827/gary",
+        "question_count": 14,
+        "reputation": 35
+      },
+      {
+        "_id": "689378e6c18f16c6bf15c77b",
+        "author_name": "PkDrew",
+        "first_seen": "2025-08-06 15:46:46.583000",
+        "last_seen": "2025-08-07 09:29:51.734000",
+        "profile_url": "https://stackoverflow.com/users/17567231/pkdrew",
+        "question_count": 14,
+        "reputation": 2367
+      },
+      {
+        "_id": "689378e7c18f16c6bf15c9d2",
+        "author_name": "Anpo Desu",
+        "first_seen": "2025-08-06 15:46:47.480000",
+        "last_seen": "2025-08-07 09:29:51.761000",
+        "profile_url": "https://stackoverflow.com/users/30764049/anpo-desu",
+        "question_count": 13,
+        "reputation": 241
+      },
+      {
+        "_id": "689378e4c18f16c6bf15c154",
+        "author_name": "Alex",
+        "first_seen": "2025-08-06 15:46:44.321000",
+        "last_seen": "2025-08-07 09:29:50.155000",
+        "profile_url": "https://stackoverflow.com/users/31198064/alex",
+        "question_count": 13,
+        "reputation": 1
+      }
+    ],
+    "reputation_stats": {
+      "mean": 6397.51,
+      "median": 594.5,
+      "max": 135695,
+      "min": 0
+    },
+    "activity_stats": {
+      "mean_questions_per_author": 8.64,
+      "median_questions_per_author": 8.0,
+      "most_active_author": {
+        "_id": "689378e6c18f16c6bf15c67d",
+        "author_name": "Aadvik",
+        "first_seen": "2025-08-06 15:46:46.165000",
+        "last_seen": "2025-08-07 09:29:50.037000",
+        "profile_url": "https://stackoverflow.com/users/27596369/aadvik",
+        "question_count": 21,
+        "reputation": 628
+      }
+    },
+    "total_authors": 100
+  },
+  "general_stats": {
+    "vote_stats": {
+      "mean": 0.1832,
+      "median": 0.0,
+      "max": 19,
+      "std": 1.7332160165426582
+    },
+    "view_stats": {
+      "mean": 64.5798,
+      "median": 52.0,
+      "max": 3856,
+      "std": 84.4884017600049
+    },
+    "answer_stats": {
+      "mean": 0.6974,
+      "median": 1.0,
+      "max": 8,
+      "unanswered_rate": 46.22
+    },
+    "tag_stats": {
+      "total_unique_tags": 4370,
+      "most_common_tags": [
+        [
+          "python",
+          1857
+        ],
+        [
+          "javascript",
+          854
+        ],
+        [
+          "html",
+          202
+        ],
+        [
+          "reactjs",
+          174
+        ],
+        [
+          "c#",
+          144
+        ],
+        [
+          "c++",
+          133
+        ],
+        [
+          "css",
+          131
+        ],
+        [
+          "java",
+          124
+        ],
+        [
+          "android",
+          122
+        ],
+        [
+          "pandas",
+          121
+        ],
+        [
+          "typescript",
+          120
+        ],
+        [
+          "ios",
+          101
+        ],
+        [
+          "node.js",
+          99
+        ],
+        [
+          "python-3.x",
+          85
+        ],
+        [
+          "django",
+          81
+        ],
+        [
+          "r",
+          80
+        ],
+        [
+          "react-native",
+          78
+        ],
+        [
+          "angular",
+          75
+        ],
+        [
+          "flutter",
+          71
+        ],
+        [
+          "next.js",
+          68
+        ]
+      ],
+      "average_tags_per_question": 3.2522
+    }
+  }
+}

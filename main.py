@@ -17,12 +17,52 @@ import argparse
 import asyncio
 import logging
 from datetime import datetime
-from typing import Optional
+from typing import Optional, List
 
-from src.scraper import StackOverflowScraper
+from src.scraper import StackOverflowScraper, QuestionData
 from src.database import DatabaseManager
 from src.analyzer import DataAnalyzer
 from src.config import Config
+
+
+async def store_questions_append_only(db_manager: DatabaseManager, questions_data: List[QuestionData], logger) -> int:
+    """
+    Stocke les questions en mode 'append-only' : ignore complètement les doublons.
+    
+    Args:
+        db_manager: Gestionnaire de base de données
+        questions_data: Liste des questions à stocker
+        logger: Logger pour les messages
+        
+    Returns:
+        Nombre de nouvelles questions stockées
+    """
+    logger.info("🔍 Mode APPEND-ONLY : Filtrage des questions existantes...")
+    
+    # Récupérer les IDs existants
+    questions_coll = db_manager.motor_database[db_manager.questions_collection]
+    existing_ids = set()
+    
+    async for doc in questions_coll.find({}, {"question_id": 1}):
+        existing_ids.add(doc["question_id"])
+    
+    logger.info(f"📊 Questions existantes en base: {len(existing_ids)}")
+    
+    # Filtrer les nouvelles questions
+    new_questions = []
+    for question in questions_data:
+        if question.question_id not in existing_ids:
+            new_questions.append(question)
+    
+    logger.info(f"✨ Nouvelles questions à ajouter: {len(new_questions)}")
+    logger.info(f"🚫 Questions doublons ignorées: {len(questions_data) - len(new_questions)}")
+    
+    if new_questions:
+        # Stocker uniquement les nouvelles
+        return await db_manager.store_questions(new_questions)
+    else:
+        logger.info("ℹ️  Aucune nouvelle question à stocker")
+        return 0
 
 
 def setup_logging(log_level: str = "INFO") -> None:
@@ -41,7 +81,8 @@ async def main(
     max_questions: int = 100,
     tags: Optional[list] = None,
     use_api: bool = False,
-    analyze_data: bool = True
+    analyze_data: bool = True,
+    storage_mode: str = "update"
 ) -> None:
     """
     Fonction principale pour exécuter le scraping et l'analyse.
@@ -51,6 +92,7 @@ async def main(
         tags: Liste des tags à filtrer
         use_api: Utiliser l'API Stack Overflow au lieu du scraping
         analyze_data: Effectuer l'analyse des données après extraction
+        storage_mode: Mode de stockage ("update", "append-only")
     """
     logger = logging.getLogger(__name__)
     logger.info("[START] DÉMARRAGE DU STACK OVERFLOW SCRAPER")
@@ -61,7 +103,8 @@ async def main(
         'start_time': datetime.now().isoformat(),
         'max_questions': max_questions,
         'target_tags': tags or [],
-        'extraction_mode': 'API Stack Overflow' if use_api else 'Scraping web'
+        'extraction_mode': 'API Stack Overflow' if use_api else 'Scraping web',
+        'storage_mode': storage_mode
     }
     
     try:
@@ -73,6 +116,13 @@ async def main(
         db_manager = DatabaseManager(config.database_config)
         await db_manager.connect()  # Connexion à la base de données
         logger.info("[OK] Connexion à la base de données établie")
+        
+        # Afficher le mode de stockage choisi
+        storage_modes = {
+            "update": "🔄 Mise à jour/Ajout (upsert - met à jour les existantes, ajoute les nouvelles)",
+            "append-only": "➕ Ajout uniquement (ignore complètement les doublons)"
+        }
+        logger.info(f"[MODE] {storage_modes.get(storage_mode, storage_mode)}")
         
         scraper = StackOverflowScraper({
             **config.scraper_config.__dict__,
@@ -125,23 +175,35 @@ async def main(
         
         logger.info(f"[OK] Extraction terminée: {len(questions_data)} questions récupérées en {extraction_time.total_seconds():.1f}s")
         
-        # Stockage en base de données
+        # Stockage en base de données avec mode intelligent
         logger.info("[STORE] PHASE 2: Stockage des données en base...")
         logger.info(f"Données à stocker: {len(questions_data)} questions")
+        logger.info(f"Mode de stockage: {storage_mode}")
         
         storage_start = datetime.now()
-        await db_manager.store_questions(questions_data)
+        
+        if storage_mode == "update":
+            # Mode par défaut : mise à jour/ajout (upsert)
+            stored_count = await db_manager.store_questions(questions_data)
+            
+        elif storage_mode == "append-only":
+            # Mode ajout uniquement : ignore les doublons
+            stored_count = await store_questions_append_only(db_manager, questions_data, logger)
+        
         storage_time = datetime.now() - storage_start
         
         execution_info.update({
             'storage_duration': storage_time.total_seconds(),
-            'questions_stored': len(questions_data),
+            'questions_stored': stored_count,
+            'questions_attempted': len(questions_data),
             'authors_stored': len(unique_authors),
-            'storage_rate': len(questions_data) / storage_time.total_seconds() if storage_time.total_seconds() > 0 else 0,
-            'storage_status': '✅ Terminé'
+            'storage_rate': stored_count / storage_time.total_seconds() if storage_time.total_seconds() > 0 else 0,
+            'storage_status': '✅ Terminé',
+            'storage_mode': storage_mode
         })
         
         logger.info(f"[OK] Stockage terminé en {storage_time.total_seconds():.1f}s")
+        logger.info(f"📊 Bilan: {stored_count}/{len(questions_data)} questions stockées")
         
         # Analyse des données
         if analyze_data:
@@ -246,6 +308,15 @@ def parse_arguments():
         help="Niveau de logging (défaut: INFO)"
     )
     
+    parser.add_argument(
+        "--mode",
+        choices=["update", "append-only"],
+        default="update",
+        help="Mode de stockage des questions (défaut: update)\n"
+             "update: Met à jour les questions existantes et ajoute les nouvelles (upsert)\n"
+             "append-only: Ajoute seulement les nouvelles questions (ignore les doublons)"
+    )
+    
     return parser.parse_args()
 
 
@@ -258,5 +329,6 @@ if __name__ == "__main__":
         max_questions=args.max_questions,
         tags=args.tags,
         use_api=args.use_api,
-        analyze_data=not args.no_analysis
+        analyze_data=not args.no_analysis,
+        storage_mode=args.mode
     ))
