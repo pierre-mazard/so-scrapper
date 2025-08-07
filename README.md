@@ -135,7 +135,7 @@ stackoverflow_data/
 
 Le système propose deux modes de stockage adaptés aux différents cas d'usage :
 - **Mode `update`** : Met à jour les questions existantes et ajoute les nouvelles (maintenance quotidienne)
-- **Mode `append-only`** : Filtre les doublons et ajoute uniquement les nouvelles questions (collecte initiale)
+- **Mode `append-only`** : Filtre les questions existantes et ajoute uniquement les nouvelles sans mise à jour (collecte incrémentale)
 
 *Détails complets dans la section [Utilisation](#-utilisation)*
 
@@ -622,9 +622,9 @@ python main.py --mode update
 ```bash
 python main.py --mode append-only
 ```
-- **Comportement** : Ajoute seulement les nouvelles questions, ignore les doublons
-- **Usage** : Enrichissement de la base, éviter les doublons
-- **Technique** : Filtre les IDs existants avant insertion
+- **Comportement** : Filtre les questions déjà présentes et ajoute seulement les nouvelles questions
+- **Usage** : Enrichissement de la base, collecte incrémentale sans mise à jour
+- **Technique** : Filtre les IDs existants avant insertion, aucune mise à jour des questions existantes
 
 ### Portées d'analyse
 
@@ -665,12 +665,12 @@ python main.py --use-api -n 2500
 python main.py --use-api -t python javascript -n 1000
 ```
 
-#### 3. Gestion des doublons
+#### 3. Enrichissement sans mise à jour
 ```bash
-# Mode append-only : évite les doublons
+# Mode append-only : ajoute seulement les nouvelles questions
 python main.py -n 2500 --use-api --mode append-only
 
-# Enrichissement progressif par tags
+# Enrichissement progressif par tags (collecte de nouvelles questions uniquement)
 python main.py -t python --mode append-only
 python main.py -t react --mode append-only
 python main.py -t vue.js --mode append-only
