@@ -39,7 +39,7 @@ class TestParseArguments:
             assert args.use_api is False
             assert args.no_analysis is False
             assert args.log_level == "INFO"
-            assert args.mode == "update"
+            assert args.mode == "upsert"
             assert args.analysis_scope == "all"
     
     def test_parse_arguments_custom_values(self):
@@ -258,6 +258,189 @@ class TestStoreQuestionsAppendOnly:
             mock_append_only.assert_called_once_with(mock_db_manager, existing_questions, mock_logger)
 
 
+class TestStorageModes:
+    """Tests pour les différents modes de stockage."""
+    
+    @pytest.fixture
+    def sample_questions(self):
+        """Questions d'exemple pour les tests."""
+        return [
+            QuestionData(
+                question_id=1001,
+                title="Test question 1",
+                url="https://stackoverflow.com/questions/1001",
+                summary="Test summary 1",
+                tags=["python", "testing"],
+                author_name="TestUser1",
+                author_profile_url="https://stackoverflow.com/users/1001",
+                author_reputation=1000,
+                view_count=100,
+                vote_count=5,
+                answer_count=2,
+                publication_date=datetime(2025, 8, 1)
+            ),
+            QuestionData(
+                question_id=1002,
+                title="Test question 2",
+                url="https://stackoverflow.com/questions/1002",
+                summary="Test summary 2",
+                tags=["javascript", "testing"],
+                author_name="TestUser2",
+                author_profile_url="https://stackoverflow.com/users/1002",
+                author_reputation=2000,
+                view_count=200,
+                vote_count=10,
+                answer_count=3,
+                publication_date=datetime(2025, 8, 2)
+            )
+        ]
+    
+    @pytest.fixture
+    def mock_components(self):
+        """Mock de tous les composants nécessaires."""
+        with patch('main.Config') as mock_config_class, \
+             patch('main.DatabaseManager') as mock_db_class, \
+             patch('main.StackOverflowScraper') as mock_scraper_class, \
+             patch('main.DataAnalyzer') as mock_analyzer_class:
+            
+            # Configuration des mocks
+            mock_config = MagicMock()
+            mock_config_class.return_value = mock_config
+            
+            mock_db = AsyncMock()
+            mock_db_class.return_value = mock_db
+            
+            mock_scraper = AsyncMock()
+            mock_scraper_class.return_value = mock_scraper
+            
+            mock_analyzer = AsyncMock()
+            mock_analyzer_class.return_value = mock_analyzer
+            
+            yield {
+                'config': mock_config,
+                'db_manager': mock_db,
+                'scraper': mock_scraper,
+                'analyzer': mock_analyzer
+            }
+    
+    @pytest.mark.asyncio
+    async def test_upsert_mode_default(self, mock_components, sample_questions):
+        """Test du mode upsert (par défaut)."""
+        # Configuration des mocks
+        mock_components['scraper'].scrape_questions.return_value = sample_questions
+        mock_components['db_manager'].store_questions.return_value = {
+            'questions_stored': 2,
+            'authors_new': 2,
+            'authors_updated': 0
+        }
+        mock_components['analyzer'].analyze_trends.return_value = {'mock': 'results'}
+        
+        # Exécution avec mode upsert (par défaut)
+        await main(
+            max_questions=2,
+            tags=['python'],
+            use_api=False,
+            analyze_data=True,
+            storage_mode='upsert',
+            analysis_scope='all'
+        )
+        
+        # Vérifications spécifiques au mode upsert
+        mock_components['db_manager'].store_questions.assert_called_once()
+        # En mode upsert, on appelle la méthode standard store_questions
+        stored_questions = mock_components['db_manager'].store_questions.call_args[0][0]
+        assert len(stored_questions) == 2
+    
+    @pytest.mark.asyncio
+    async def test_update_mode_existing_only(self, mock_components, sample_questions):
+        """Test du mode update (mise à jour uniquement)."""
+        # Configuration des mocks
+        mock_components['scraper'].scrape_questions.return_value = sample_questions
+        mock_components['db_manager'].get_question_ids.return_value = [1001]  # Seule la question 1001 existe
+        
+        with patch('main.store_questions_update_only') as mock_update_only:
+            mock_update_only.return_value = {
+                'questions_stored': 1,  # Seule 1 question mise à jour
+                'authors_new': 0,
+                'authors_updated': 1
+            }
+            mock_components['analyzer'].analyze_trends.return_value = {'mock': 'results'}
+            
+            # Exécution avec mode update
+            await main(
+                max_questions=2,
+                tags=['python'],
+                use_api=False,
+                analyze_data=True,
+                storage_mode='update',
+                analysis_scope='all'
+            )
+            
+            # Vérifications spécifiques au mode update
+            mock_update_only.assert_called_once()
+            # Vérifier que store_questions standard n'a PAS été appelé
+            mock_components['db_manager'].store_questions.assert_not_called()
+    
+    @pytest.mark.asyncio
+    async def test_append_only_mode_new_only(self, mock_components, sample_questions):
+        """Test du mode append-only (ajout uniquement)."""
+        # Configuration des mocks
+        mock_components['scraper'].scrape_questions.return_value = sample_questions
+        mock_components['db_manager'].get_question_ids.return_value = [1001]  # Seule la question 1001 existe
+        
+        with patch('main.store_questions_append_only') as mock_append_only:
+            mock_append_only.return_value = {
+                'questions_stored': 1,  # Seule la nouvelle question ajoutée
+                'authors_new': 1,
+                'authors_updated': 0
+            }
+            mock_components['analyzer'].analyze_trends.return_value = {'mock': 'results'}
+            
+            # Exécution avec mode append-only
+            await main(
+                max_questions=2,
+                tags=['python'],
+                use_api=False,
+                analyze_data=True,
+                storage_mode='append-only',
+                analysis_scope='all'
+            )
+            
+            # Vérifications spécifiques au mode append-only
+            mock_append_only.assert_called_once()
+            # Vérifier que store_questions standard n'a PAS été appelé
+            mock_components['db_manager'].store_questions.assert_not_called()
+    
+    @pytest.mark.asyncio
+    async def test_mode_default_is_upsert(self, mock_components, sample_questions):
+        """Test que le mode par défaut est bien upsert."""
+        # Configuration des mocks
+        mock_components['scraper'].scrape_questions.return_value = sample_questions
+        mock_components['db_manager'].store_questions.return_value = {
+            'questions_stored': 2,
+            'authors_new': 2,
+            'authors_updated': 0
+        }
+        mock_components['analyzer'].analyze_trends.return_value = {'mock': 'results'}
+        
+        # Exécution SANS spécifier le mode (doit utiliser le défaut)
+        await main(
+            max_questions=2,
+            tags=['python'],
+            use_api=False,
+            analyze_data=True,
+            # storage_mode non spécifié -> doit utiliser 'upsert'
+            analysis_scope='all'
+        )
+        
+        # Vérifications que le comportement upsert est utilisé
+        mock_components['db_manager'].store_questions.assert_called_once()
+        
+        # Vérifier que les questions ont bien été passées à store_questions
+        stored_questions = mock_components['db_manager'].store_questions.call_args[0][0]
+        assert len(stored_questions) == 2
+
+
 class TestMainFunction:
     """Tests pour la fonction main principale."""
     
@@ -321,13 +504,13 @@ class TestMainFunction:
         }
         mock_components['analyzer'].analyze_trends.return_value = {'mock': 'results'}
         
-        # Exécution
+        # Exécution avec mode par défaut "upsert"
         await main(
             max_questions=10,
             tags=['python'],
             use_api=False,
             analyze_data=True,
-            storage_mode='update',
+            storage_mode='upsert',  # Mode par défaut
             analysis_scope='all'
         )
         
@@ -511,13 +694,13 @@ class TestMainIntegration:
                 'total_questions': 2
             }
             
-            # Exécution du pipeline complet
+            # Exécution du pipeline complet avec mode par défaut
             await main(
                 max_questions=2,
                 tags=['python', 'javascript'],
                 use_api=False,
                 analyze_data=True,
-                storage_mode='update',
+                storage_mode='upsert',  # Mode par défaut
                 analysis_scope='all'
             )
             

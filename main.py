@@ -25,6 +25,46 @@ from src.analyzer import DataAnalyzer
 from src.config import Config
 
 
+async def store_questions_update_only(db_manager: DatabaseManager, questions_data: List[QuestionData], logger) -> Dict[str, int]:
+    """
+    Stocke les questions en mode 'update-only' : met à jour seulement les questions/auteurs existants.
+    
+    Args:
+        db_manager: Gestionnaire de base de données
+        questions_data: Liste des questions à traiter
+        logger: Logger pour les messages
+        
+    Returns:
+        Dict avec les statistiques de stockage
+    """
+    logger.info("🔍 Mode UPDATE-ONLY : Mise à jour des questions existantes uniquement...")
+    
+    # Récupérer les IDs existants
+    questions_coll = db_manager.motor_database[db_manager.questions_collection]
+    existing_ids = set()
+    
+    async for doc in questions_coll.find({}, {"question_id": 1}):
+        existing_ids.add(doc["question_id"])
+    
+    logger.info(f"📊 Questions existantes en base: {len(existing_ids)}")
+    
+    # Filtrer les questions existantes à mettre à jour
+    update_questions = []
+    for question in questions_data:
+        if question.question_id in existing_ids:
+            update_questions.append(question)
+    
+    logger.info(f"🔄 Questions à mettre à jour: {len(update_questions)}")
+    logger.info(f"🚫 Questions nouvelles ignorées: {len(questions_data) - len(update_questions)}")
+    
+    if update_questions:
+        # Mettre à jour uniquement les existantes
+        return await db_manager.store_questions(update_questions, update_only=True)
+    else:
+        logger.info("ℹ️  Aucune question existante à mettre à jour")
+        return {'questions_stored': 0, 'authors_new': 0, 'authors_updated': 0}
+
+
 async def store_questions_append_only(db_manager: DatabaseManager, questions_data: List[QuestionData], logger) -> Dict[str, int]:
     """
     Stocke les questions en mode 'append-only' : ignore complètement les doublons.
@@ -82,7 +122,7 @@ async def main(
     tags: Optional[list] = None,
     use_api: bool = False,
     analyze_data: bool = True,
-    storage_mode: str = "update",
+    storage_mode: str = "upsert",
     analysis_scope: str = "all"
 ) -> None:
     """
@@ -93,7 +133,7 @@ async def main(
         tags: Liste des tags à filtrer
         use_api: Utiliser l'API Stack Overflow au lieu du scraping
         analyze_data: Effectuer l'analyse des données après extraction
-        storage_mode: Mode de stockage ("update", "append-only")
+        storage_mode: Mode de stockage ("upsert", "update", "append-only")
         analysis_scope: Portée de l'analyse ("all", "new-only")
     """
     logger = logging.getLogger(__name__)
@@ -122,8 +162,9 @@ async def main(
         
         # Afficher le mode de stockage choisi
         storage_modes = {
-            "update": "🔄 Mise à jour/Ajout (upsert - met à jour les existantes, ajoute les nouvelles)",
-            "append-only": "➕ Ajout uniquement (ignore complètement les doublons)"
+            "upsert": "🔄 Insert + Mise à jour (upsert - ajoute les nouvelles, met à jour les existantes)",
+            "update": "🔄 Mise à jour uniquement (met à jour seulement les questions/auteurs existants)",
+            "append-only": "➕ Ajout uniquement (filtre les questions existantes, ajoute seulement les nouvelles)"
         }
         logger.info(f"[MODE] {storage_modes.get(storage_mode, storage_mode)}")
         
@@ -186,14 +227,24 @@ async def main(
         storage_start = datetime.now()
         new_questions_ids = []  # Pour traquer les nouvelles questions
         
-        if storage_mode == "update":
-            # Mode par défaut : mise à jour/ajout (upsert)
+        if storage_mode == "upsert":
+            # Mode par défaut : insert + mise à jour (upsert)
             storage_result = await db_manager.store_questions(questions_data)
             stored_count = storage_result['questions_stored']
             authors_new = storage_result['authors_new']
             authors_updated = storage_result['authors_updated']
-            # En mode update, on considère toutes les questions comme "nouvelles" pour l'analyse
+            # En mode upsert, on considère toutes les questions comme "nouvelles" pour l'analyse
             new_questions_ids = [q.question_id for q in questions_data]
+            
+        elif storage_mode == "update":
+            # Mode mise à jour uniquement : met à jour seulement les existantes
+            storage_result = await store_questions_update_only(db_manager, questions_data, logger)
+            stored_count = storage_result['questions_stored']
+            authors_new = storage_result['authors_new']
+            authors_updated = storage_result['authors_updated']
+            # En mode update, seules les questions mises à jour sont considérées comme "nouvelles" pour l'analyse
+            existing_ids = await db_manager.get_question_ids()
+            new_questions_ids = [q.question_id for q in questions_data if q.question_id in existing_ids]
             
         elif storage_mode == "append-only":
             # Mode ajout uniquement : ignore les doublons
@@ -417,11 +468,12 @@ def parse_arguments():
     
     parser.add_argument(
         "--mode",
-        choices=["update", "append-only"],
-        default="update",
-        help="Mode de stockage des questions (défaut: update)\n"
-             "update: Met à jour les questions existantes et ajoute les nouvelles (upsert)\n"
-             "append-only: Ajoute seulement les nouvelles questions (ignore les doublons)"
+        choices=["upsert", "update", "append-only"],
+        default="upsert",
+        help="Mode de stockage des questions (défaut: upsert)\n"
+             "upsert: Insert nouvelles + met à jour existantes (comportement par défaut)\n"
+             "update: Met à jour seulement les questions/auteurs existants (pas d'ajout)\n"
+             "append-only: Ajoute seulement les nouvelles questions (filtre les existantes)"
     )
     
     parser.add_argument(

@@ -479,6 +479,74 @@ class StackOverflowScraper:
         
         return questions[:max_questions]
     
+    async def get_questions_by_ids(self, question_ids: List[int]) -> List[QuestionData]:
+        """
+        Récupère des questions spécifiques par leurs IDs via l'API Stack Overflow.
+        
+        Args:
+            question_ids: Liste des IDs de questions à récupérer
+            
+        Returns:
+            Liste des questions récupérées
+        """
+        if not question_ids:
+            return []
+        
+        # L'API Stack Overflow accepte maximum 100 IDs par requête
+        batch_size = 100
+        all_questions = []
+        
+        # Traiter par batches
+        for i in range(0, len(question_ids), batch_size):
+            batch_ids = question_ids[i:i + batch_size]
+            
+            try:
+                # Convertir les IDs en string séparés par des points-virgules
+                ids_string = ';'.join(map(str, batch_ids))
+                
+                # Construction des paramètres
+                params = {
+                    'order': 'desc',
+                    'sort': 'creation',
+                    'site': 'stackoverflow',
+                    'filter': 'withbody'  # Inclut le corps de la question
+                }
+                
+                # Ajouter l'API key si disponible
+                if hasattr(self.api_config, 'key') and self.api_config.key:
+                    params['key'] = self.api_config.key
+                elif hasattr(self.api_config, 'get') and self.api_config.get('key'):
+                    params['key'] = self.api_config['key']
+                
+                # Requête API pour récupérer les questions par IDs
+                async with self.session.get(
+                    f"{self.API_BASE_URL}/questions/{ids_string}",
+                    params=params
+                ) as response:
+                    if response.status == 200:
+                        data = await response.json()
+                        api_questions = data.get('items', [])
+                        
+                        # Conversion des données API vers notre modèle
+                        for api_question in api_questions:
+                            question_data = self._convert_api_to_question_data(api_question)
+                            all_questions.append(question_data)
+                        
+                        self.logger.debug(f"Batch de {len(batch_ids)} IDs: {len(api_questions)} questions récupérées")
+                        
+                    else:
+                        self.logger.error(f"Erreur API pour batch IDs {i//batch_size + 1}: {response.status}")
+                        
+                # Respecter les limites de l'API
+                await asyncio.sleep(0.1)
+                        
+            except Exception as e:
+                self.logger.error(f"Erreur lors de la récupération du batch {i//batch_size + 1}: {e}")
+                continue
+        
+        self.logger.info(f"Total récupéré: {len(all_questions)}/{len(question_ids)} questions")
+        return all_questions
+    
     def _convert_api_to_question_data(self, api_question: Dict) -> QuestionData:
         """Convertit une réponse de l'API en QuestionData."""
         owner = api_question.get('owner', {})

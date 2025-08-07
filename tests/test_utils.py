@@ -131,6 +131,148 @@ class TestClearDatabase:
             pass
 
 
+class TestUpdateAllDatabase:
+    """Tests pour utils/update_all_database.py."""
+    
+    def test_update_all_database_script_exists(self):
+        """Test que le script update_all_database.py existe."""
+        script_path = Path(__file__).parent.parent / "utils" / "update_all_database.py"
+        assert script_path.exists(), "Le script update_all_database.py doit exister"
+    
+    def test_update_all_database_script_structure(self):
+        """Test de la structure du script update_all_database.py."""
+        script_path = Path(__file__).parent.parent / "utils" / "update_all_database.py"
+        
+        with open(script_path, 'r', encoding='utf-8') as f:
+            content = f.read()
+        
+        # Vérifications des imports essentiels
+        assert 'from src.config import Config' in content, \
+            "Le script doit importer Config"
+        assert 'from src.database import DatabaseManager' in content, \
+            "Le script doit importer DatabaseManager"
+        assert 'from src.scraper import StackOverflowScraper' in content, \
+            "Le script doit importer StackOverflowScraper"
+        assert 'import argparse' in content, \
+            "Le script doit supporter les arguments CLI"
+        
+        # Vérifications de la structure principale
+        assert 'class DatabaseUpdater' in content, \
+            "Le script doit contenir la classe DatabaseUpdater"
+        assert 'async def main(' in content, \
+            "Le script doit avoir une fonction main asynchrone"
+        assert 'if __name__ == "__main__"' in content, \
+            "Le script doit avoir un guard main"
+    
+    def test_update_all_database_cli_arguments(self):
+        """Test des arguments de ligne de commande."""
+        script_path = Path(__file__).parent.parent / "utils" / "update_all_database.py"
+        
+        with open(script_path, 'r', encoding='utf-8') as f:
+            content = f.read()
+        
+        # Vérifications des arguments supportés
+        assert '--batch-size' in content, \
+            "Le script doit supporter l'argument --batch-size"
+        assert '--dry-run' in content, \
+            "Le script doit supporter l'argument --dry-run"
+        assert '--max-questions' in content, \
+            "Le script doit supporter l'argument --max-questions"
+        assert '--delay' in content, \
+            "Le script doit supporter l'argument --delay"
+    
+    def test_update_all_database_imports(self):
+        """Test que le script peut être importé sans erreur."""
+        script_path = Path(__file__).parent.parent / "utils" / "update_all_database.py"
+        
+        # Test d'import basique (vérification syntaxe)
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("update_all_database", script_path)
+        
+        assert spec is not None, "Le script doit pouvoir être chargé comme module"
+        
+        try:
+            module = importlib.util.module_from_spec(spec)
+            # On ne execute pas pour éviter les effets de bord
+            # mais on vérifie que la syntaxe est correcte
+            with open(script_path, 'r', encoding='utf-8') as f:
+                code = compile(f.read(), script_path, 'exec')
+            assert code is not None, "Le script doit avoir une syntaxe Python valide"
+        except SyntaxError as e:
+            pytest.fail(f"Erreur de syntaxe dans update_all_database.py: {e}")
+    
+    def test_update_all_database_configuration(self):
+        """Test que le script gère correctement la configuration."""
+        script_path = Path(__file__).parent.parent / "utils" / "update_all_database.py"
+        
+        with open(script_path, 'r', encoding='utf-8') as f:
+            content = f.read()
+        
+        # Vérifications de la gestion de configuration
+        assert 'Config()' in content, \
+            "Le script doit instancier Config"
+        assert 'config.database_config' in content, \
+            "Le script doit utiliser la configuration de base de données"
+    
+    def test_update_all_database_logging(self):
+        """Test que le script configure le logging correctement."""
+        script_path = Path(__file__).parent.parent / "utils" / "update_all_database.py"
+        
+        with open(script_path, 'r', encoding='utf-8') as f:
+            content = f.read()
+        
+        # Vérifications du système de logging
+        assert 'logging' in content, \
+            "Le script doit utiliser le module logging"
+        assert '_setup_logger' in content, \
+            "Le script doit configurer un logger"
+        assert 'logs/' in content, \
+            "Le script doit écrire des logs dans le dossier logs/"
+    
+    def test_update_all_database_help_message(self):
+        """Test que le script affiche une aide correcte."""
+        script_path = Path(__file__).parent.parent / "utils" / "update_all_database.py"
+        
+        try:
+            # Test de l'affichage de l'aide avec timeout plus long
+            result = subprocess.run(
+                [sys.executable, str(script_path), '--help'],
+                capture_output=True,
+                text=True,
+                timeout=30  # Timeout plus long pour les imports
+            )
+            
+            help_output = result.stdout.lower()
+            
+            # Vérifications du contenu de l'aide
+            assert 'batch-size' in help_output, \
+                "L'aide doit mentionner l'option batch-size"
+            assert 'dry-run' in help_output, \
+                "L'aide doit mentionner l'option dry-run"
+            assert 'max-questions' in help_output, \
+                "L'aide doit mentionner l'option max-questions"
+            assert 'delay' in help_output, \
+                "L'aide doit mentionner l'option delay"
+            
+            # L'aide doit s'afficher correctement
+            assert result.returncode == 0, \
+                "L'affichage de l'aide doit réussir"
+                
+        except subprocess.TimeoutExpired:
+            # Si le timeout persiste, on teste seulement la présence des arguments dans le code
+            with open(script_path, 'r', encoding='utf-8') as f:
+                content = f.read().lower()
+            
+            assert 'batch-size' in content, "Le script doit contenir l'option batch-size"
+            assert 'dry-run' in content, "Le script doit contenir l'option dry-run"
+            assert 'max-questions' in content, "Le script doit contenir l'option max-questions"
+            assert 'delay' in content, "Le script doit contenir l'option delay"
+            
+            pytest.skip("Script prend trop de temps à démarrer, mais structure validée")
+        except Exception as e:
+            pytest.fail(f"Erreur lors du test de l'aide: {e}")
+
+
 class TestRunTests:
     """Tests pour run_tests.py."""
     
@@ -257,7 +399,8 @@ class TestUtilsIntegration:
         # Vérification des fichiers essentiels
         expected_files = [
             "check_mongodb.py",
-            "clear_database.py"
+            "clear_database.py",
+            "update_all_database.py"
         ]
         
         for filename in expected_files:

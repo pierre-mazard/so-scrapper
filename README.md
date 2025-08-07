@@ -3,7 +3,7 @@
 Un outil complet d'extraction et d'analyse de données Stack Overflow avec support dual (Web Scraping + API) et système d'analyse avancé.
 
 > **🚀 Mise à jour majeure v2.0** - Août 2025
-> - ✨ **Suite de tests complète** : 107 tests avec 100% de taux de réussite
+> - ✨ **Suite de tests complète** : 118 tests avec 100% de taux de réussite
 > - 🎯 **Tests end-to-end** : Validation du pipeline complet 
 > - 🔧 **Tests utilitaires** : Validation de tous les scripts de maintenance
 > - 📊 **Reporting automatique** : Génération de rapports de tests détaillés
@@ -133,8 +133,9 @@ stackoverflow_data/
 
 #### 🔄 Modes de stockage intelligents
 
-Le système propose deux modes de stockage adaptés aux différents cas d'usage :
-- **Mode `update`** : Met à jour les questions existantes et ajoute les nouvelles (maintenance quotidienne)
+Le système propose trois modes de stockage adaptés aux différents cas d'usage :
+- **Mode `upsert`** (défaut) : Insert nouvelles questions + met à jour les existantes (comportement hybride optimal)
+- **Mode `update`** : Met à jour seulement les questions/auteurs existants (pas d'ajout de nouvelles)
 - **Mode `append-only`** : Filtre les questions existantes et ajoute uniquement les nouvelles sans mise à jour (collecte incrémentale)
 
 *Détails complets dans la section [Utilisation](#-utilisation)*
@@ -393,9 +394,17 @@ Ce pipeline complet assure une collecte intelligente, un stockage optimisé et u
 
 ### 💾 Stockage intelligent
 - **Base MongoDB** : Stockage NoSQL optimisé avec index
-- **Modes de stockage** : `update` (mise à jour) ou `append-only` (ajout uniquement)
-- **Gestion des doublons** : Détection et filtrage automatique
+- **Modes de stockage** : `upsert` (défaut), `update` (existants seulement) ou `append-only` (nouvelles seulement)
+- **Gestion des doublons** : Détection et filtrage automatique selon le mode
 - **Suivi des auteurs** : Collection séparée pour les métadonnées des auteurs
+- **Mise à jour complète** : Utilitaire dédié pour synchroniser toute la base avec l'API ✨
+
+### 🔄 Maintenance de base de données ✨
+- **Mise à jour globale** : Synchronisation de toutes les questions existantes avec Stack Overflow
+- **Traitement par batches** : Optimisé pour de gros volumes avec gestion des erreurs
+- **Mode dry-run** : Test des mises à jour sans modification de la base
+- **Rapports détaillés** : Métriques de performance et recommandations automatiques
+- **Logging complet** : Traçabilité complète des opérations de maintenance
 
 ### 📊 Analyse avancée
 - **NLP (Natural Language Processing)** : Analyse de sentiment, extraction de mots-clés
@@ -450,10 +459,10 @@ python -c "import nltk; nltk.download('punkt'); nltk.download('stopwords'); nltk
 
 3. **Vérifier l'installation avec les tests** ✨ :
    ```bash
-   # Exécution de la suite de tests complète (107 tests)
+   # Exécution de la suite de tests complète (118 tests)
    python run_tests.py
    
-   # Résultat attendu : 106/107 tests réussis en ~30s
+   # Résultat attendu : 117/118 tests réussis en ~30s
    # Génération automatique d'un rapport dans output/reports/
    ```
 
@@ -475,15 +484,15 @@ so-scrapper/
 │   ├── analyzer.py            # Moteur d'analyse NLP
 │   └── config.py              # Gestion de la configuration
 │
-├── 📁 tests/                   # Suite de tests complète (107 tests)
+├── 📁 tests/                   # Suite de tests complète (118 tests)
 │   ├── __init__.py            # Package de tests
 │   ├── conftest.py            # Configuration pytest + fixtures
 │   ├── test_analyzer.py       # Tests moteur d'analyse (22 tests)
 │   ├── test_config.py         # Tests configuration (20 tests)
 │   ├── test_database.py       # Tests MongoDB (16 tests)
 │   ├── test_scraper.py        # Tests extraction (12 tests)
-│   ├── test_main.py           # Tests pipeline principal ✨ (17 tests)
-│   ├── test_utils.py          # Tests utilitaires ✨ (13 tests)
+│   ├── test_main.py           # Tests pipeline principal ✨ (19 tests)
+│   ├── test_utils.py          # Tests utilitaires ✨ (22 tests)
 │   ├── test_pipeline_e2e.py   # Tests end-to-end ✨ (7 tests)
 │   ├── test_logger.py         # Système de logging des tests
 │   ├── analyze_logs.py        # Analyseur de logs de tests
@@ -491,7 +500,8 @@ so-scrapper/
 │
 ├── 📁 utils/                   # Utilitaires et scripts
 │   ├── check_mongodb.py       # Diagnostic MongoDB
-│   └── clear_database.py      # Nettoyage de la base
+│   ├── clear_database.py      # Nettoyage de la base
+│   └── update_all_database.py # Mise à jour complète de la base ✨
 │
 ├── 📁 output/                  # Résultats générés
 │   ├── analysis/              # Analyses JSON
@@ -586,7 +596,7 @@ python main.py
 
 **Comportement par défaut :**
 - Extrait 300 questions via scraping web
-- Stocke en mode `update` (met à jour les existantes et ajoute les nouvelles)
+- Stocke en mode `upsert` (insert nouvelles + met à jour les existantes)
 - Effectue une analyse complète
 - Génère un rapport automatique
 
@@ -605,18 +615,26 @@ python main.py [OPTIONS]
 | `--use-api` | | flag | False | Utiliser l'API au lieu du scraping |
 | `--no-analysis` | | flag | False | Désactiver complètement l'analyse des données |
 | `--log-level` | | choice | INFO | Niveau de logging (DEBUG/INFO/WARNING/ERROR) |
-| `--mode` | | choice | update | Mode de stockage (update/append-only) |
+| `--mode` | | choice | upsert | Mode de stockage (upsert/update/append-only) |
 | `--analysis-scope` | | choice | all | Portée de l'analyse (all/new-only) |
 
 ### Modes de stockage
 
-#### 🔄 Mode `update` (défaut)
+#### 🔄 Mode `upsert` (défaut)
+```bash
+python main.py --mode upsert
+```
+- **Comportement** : Insert nouvelles questions + met à jour les existantes (comportement hybride optimal)
+- **Usage** : Utilisation générale, collecte et maintenance combinées
+- **Technique** : Utilise l'upsert MongoDB sur `question_id` avec insertion automatique
+
+#### 🔄 Mode `update`
 ```bash
 python main.py --mode update
 ```
-- **Comportement** : Met à jour les questions existantes et ajoute les nouvelles
-- **Usage** : Maintenance régulière, actualisation des données
-- **Technique** : Utilise l'upsert MongoDB sur `question_id`
+- **Comportement** : Met à jour seulement les questions/auteurs existants (pas d'ajout de nouvelles)
+- **Usage** : Mise à jour des métadonnées, actualisation de données existantes
+- **Technique** : Update MongoDB sans upsert, ignore les questions non existantes
 
 #### ➕ Mode `append-only`
 ```bash
@@ -665,8 +683,14 @@ python main.py --use-api -n 2500
 python main.py --use-api -t python javascript -n 1000
 ```
 
-#### 3. Enrichissement sans mise à jour
+#### 3. Modes de stockage spécialisés
 ```bash
+# Mode upsert : insert + mise à jour (défaut, optimal)
+python main.py -n 1000 --mode upsert
+
+# Mode update : mise à jour des existantes seulement
+python main.py -n 1000 --mode update
+
 # Mode append-only : ajoute seulement les nouvelles questions
 python main.py -n 2500 --use-api --mode append-only
 
@@ -711,8 +735,11 @@ python main.py --use-api -n 1000 --analysis-scope new-only
 # Mode append-only + analyse des nouvelles questions
 python main.py --mode append-only --analysis-scope new-only -n 500
 
-# Mise à jour + analyse complète pour recalculer les tendances
-python main.py --mode update --analysis-scope all
+# Mode upsert + analyse complète pour recalculer les tendances (défaut)
+python main.py --mode upsert --analysis-scope all
+
+# Mode update + analyse des questions mises à jour
+python main.py --mode update --analysis-scope new-only
 
 # Mode économe : collecte sans analyse immédiate
 python main.py --use-api -n 2000 --no-analysis
@@ -720,11 +747,17 @@ python main.py --use-api -n 2000 --no-analysis
 
 #### 7. Workflows spécialisés
 ```bash
-# Collecte initiale massive
-python main.py --use-api -n 2500 --mode append-only --no-analysis
+# Collecte initiale massive (mode upsert)
+python main.py --use-api -n 2500 --mode upsert --no-analysis
 
-# Mise à jour quotidienne
-python main.py --use-api -n 500 --mode update
+# Mise à jour quotidienne (mode upsert pour maintenance)
+python main.py --use-api -n 500 --mode upsert
+
+# Actualisation de métadonnées seulement (mode update)
+python main.py --use-api -n 1000 --mode update
+
+# Extension de base sans modifications (mode append-only)
+python main.py --use-api -n 1000 --mode append-only
 
 # Analyse de technologies spécifiques
 python main.py -t "machine-learning" "artificial-intelligence" --use-api
@@ -834,6 +867,9 @@ Database: stackoverflow_data
 ```bash
 # Diagnostic complet de la base
 python utils/check_mongodb.py
+
+# Mise à jour complète de toutes les questions en base
+python utils/update_all_database.py
 
 # Nettoyage complet (⚠️ DESTRUCTIF)
 python utils/clear_database.py
@@ -965,6 +1001,16 @@ Le système d'analyse est composé de plusieurs modules spécialisés :
 - **Métadonnées** d'exécution
 - **Prêt pour visualisation**
 
+#### 🔄 Rapports de mise à jour (`output/reports/`) ✨
+**Générés automatiquement par `utils/update_all_database.py` :**
+- **Rapport complet** : `database_update_report_YYYYMMDD_HHMMSS.md`
+- **Métriques détaillées** : Statistiques de performance et résultats
+- **Analyse de performance** : Taux de succès, vitesse de traitement
+- **Recommandations** : Optimisations basées sur les résultats
+- **Configuration utilisée** : Paramètres et options d'exécution
+- **Journal d'exécution** : Historique détaillé des opérations
+
+
 ### Exemples de métriques
 
 ```
@@ -983,7 +1029,7 @@ Le système d'analyse est composé de plusieurs modules spécialisés :
 
 ### Architecture de tests complète
 
-Le projet dispose d'une **suite de tests exhaustive avec 107 tests** couvrant l'intégralité du pipeline avec un taux de réussite de **100% (106/107 tests passés, 1 test d'intégration volontairement skippé)** :
+Le projet dispose d'une **suite de tests exhaustive avec 118 tests** couvrant l'intégralité du pipeline avec un taux de réussite de **100% (117/118 tests passés, 1 test d'intégration volontairement skippé)** :
 
 ```
 tests/
@@ -992,8 +1038,8 @@ tests/
 ├── test_config.py           # Tests configuration et parsing (20 tests)
 ├── test_database.py         # Tests MongoDB et stockage (16 tests)
 ├── test_scraper.py          # Tests extraction données (12 tests)
-├── test_main.py             # Tests pipeline principal (17 tests)
-├── test_utils.py            # Tests scripts utilitaires (13 tests)
+├── test_main.py             # Tests pipeline principal (19 tests)
+├── test_utils.py            # Tests scripts utilitaires (22 tests)
 ├── test_pipeline_e2e.py     # Tests end-to-end intégration (7 tests)
 ├── test_logger.py           # Système de logging des tests
 ├── analyze_logs.py          # Analyseur de résultats de tests
@@ -1002,19 +1048,21 @@ tests/
 
 ### 🚀 Nouveautés majeures dans les tests
 
-#### ✨ **test_main.py** - Tests du pipeline principal (17 tests)
+#### ✨ **test_main.py** - Tests du pipeline principal (19 tests)
 **Couverture complète de `main.py` (452 lignes) :**
 - **Parsing d'arguments CLI** : Validation de tous les paramètres et modes
 - **Configuration logging** : Tests des niveaux INFO, DEBUG, WARNING  
 - **Mode append-only** : Logique de filtrage des doublons avant insertion
+- **Modes de stockage** : Tests complets des 3 modes (upsert, update, append-only) ✨
 - **Pipeline complet** : Orchestration extraction → stockage → analyse
 - **Gestion d'erreurs** : Tests de robustesse et récupération d'erreurs
 - **Intégration avec mocks** : Tests réalistes avec tous les composants mockés
 
-#### ✨ **test_utils.py** - Tests des utilitaires (13 tests)
+#### ✨ **test_utils.py** - Tests des utilitaires (22 tests)
 **Validation des scripts de maintenance :**
 - **check_mongodb.py** : Tests existence, imports et exécution
 - **clear_database.py** : Tests sécurité et validation structure
+- **update_all_database.py** : Tests configuration, imports et arguments ✨
 - **run_tests.py** : Tests du système de reporting automatique
 - **Validation syntaxique** : Vérification de tous les scripts Python
 - **Structure projet** : Tests d'intégrité de l'arborescence
@@ -1035,7 +1083,7 @@ tests/
 # 🏆 COMMANDE PRINCIPALE - Exécution complète avec rapport
 python run_tests.py
 
-# Résultat : 106 ✅ passed, 1 ⏭️ skipped in 28.90s
+# Résultat : 117 ✅ passed, 1 ⏭️ skipped in ~30s
 # Génération automatique de rapport détaillé
 ```
 
@@ -1108,7 +1156,7 @@ pytest tests/ --durations=10
 ────────────────────────
 • test_main.py : 17/17 ✅ (Pipeline principal)
 • test_pipeline_e2e.py : 7/7 ✅ (End-to-end)
-• test_utils.py : 13/13 ✅ (Utilitaires)
+• test_utils.py : 22/22 ✅ (Utilitaires)
 • test_analyzer.py : 21/22 ✅ (1 test skippé)
 • test_config.py : 20/20 ✅ (Configuration)
 • test_database.py : 16/16 ✅ (MongoDB)
@@ -1159,7 +1207,7 @@ python_functions = test_*
 
 #### 🏆 Tests critiques validés
 - ✅ **Pipeline complet** : Extraction → Stockage → Analyse → Rapport
-- ✅ **Modes de stockage** : update, append-only avec logique anti-doublons
+- ✅ **Modes de stockage** : upsert (défaut), update, append-only avec logique anti-doublons
 - ✅ **Sources de données** : API Stack Overflow + Web Scraping
 - ✅ **Analyse NLP** : Sentiment, mots-clés, tendances, patterns temporels
 - ✅ **Robustesse** : Gestion d'erreurs réseau, base de données, parsing
@@ -1262,7 +1310,73 @@ python utils/clear_database.py
 - Toutes les analyses
 - Tous les index personnalisés
 
-#### 📊 `tests/analyze_logs.py`
+#### � `utils/update_all_database.py`
+**Mise à jour complète de la base de données**
+
+```bash
+# Mise à jour complète de toute la base
+python utils/update_all_database.py
+
+# Mode test (dry-run) sans modification
+python utils/update_all_database.py --dry-run
+
+# Avec options personnalisées
+python utils/update_all_database.py --batch-size 50 --max-questions 1000 --delay 0.2
+```
+
+**Fonctionnalités :**
+- 🔄 **Mise à jour complète** : Met à jour TOUTES les questions existantes en base
+- 📡 **API Stack Overflow** : Récupère les dernières informations (scores, réponses, vues)
+- 📦 **Traitement par batches** : Optimisé pour traiter de gros volumes (batch par défaut: 100)
+- ⚡ **Performance intelligente** : Délais configurables entre requêtes (défaut: 0.1s)
+- 🧪 **Mode dry-run** : Test sans modification pour validation
+- 📊 **Reporting complet** : Génération automatique de rapports détaillés
+- 📈 **Progress tracking** : Suivi en temps réel avec statistiques
+- 🛡️ **Gestion d'erreurs** : Recovery automatique et logging détaillé
+
+**Options disponibles :**
+- `--batch-size` : Nombre de questions par batch (défaut: 100)
+- `--dry-run` : Mode test sans modification de la base
+- `--max-questions` : Limite le nombre de questions à traiter
+- `--delay` : Délai entre requêtes API en secondes (défaut: 0.1)
+
+**Exemple de sortie :**
+```
+================================================================================
+[UPDATE] DÉBUT DE LA MISE À JOUR COMPLÈTE DE LA BASE DE DONNÉES
+================================================================================
+[LIST] Récupération de la liste des questions en base...
+[STATS] 2521 questions trouvées en base de données
+📦 26 batches de 100 questions maximum
+⏱️  Délai entre requêtes: 0.1s
+[BATCH] Batch 1/26 : Mise à jour de 100 questions...
+[API] 15 questions récupérées de l'API
+[OK] 15 questions mises à jour
+📈 Progression: 3.8% (1/26 batches)
+...
+================================================================================
+📊 RÉSUMÉ FINAL DE LA MISE À jour
+================================================================================
+⏱️  Durée totale: 29.2s
+📋 Questions en base: 2521
+🔄 Questions traitées: 2521
+✅ Questions mises à jour: 60
+👤 Auteurs mis à jour: 45
+⚠️  Erreurs: 0
+📦 Batches complétés: 26
+📈 Taux de succès: 2.4%
+⚡ Vitesse: 287.8 questions/sec
+🎉 MISE À JOUR TERMINÉE AVEC SUCCÈS!
+📄 Rapport de mise à jour généré: output/reports/database_update_report_20250805_152030.md
+```
+
+**Cas d'usage :**
+- 📈 **Mise à jour des scores** : Synchroniser les votes et réponses récentes
+- 🔄 **Maintenance périodique** : Maintenir la base à jour automatiquement
+- 📊 **Avant analyse** : S'assurer d'avoir les données les plus récentes
+- 🧹 **Après restauration** : Mettre à jour une base restaurée d'une sauvegarde
+
+#### �📊 `tests/analyze_logs.py`
 **Analyseur de logs de tests**
 
 ```bash
@@ -1495,10 +1609,55 @@ python main.py --log-level ERROR
 # Log principal de l'application
 tail -f logs/scraper.log
 
+# Logs de mise à jour de base de données ✨
+tail -f logs/database_update_*.log
+
 # Logs des tests
 ls tests/logs/
 cat tests/logs/test_run_*.log
+
+# Visualiser tous les logs d'une journée
+ls logs/ | grep $(date +%Y%m%d)
 ```
+
+**Types de logs générés :**
+- `scraper.log` : Log principal avec toutes les opérations d'extraction et stockage
+- `database_update_YYYYMMDD_HHMMSS.log` : Logs détaillés des mises à jour complètes de base ✨  
+- `tests/logs/test_run_*.log` : Logs des exécutions de tests avec détails complets
+- `tests/logs/test_errors_*.log` : Erreurs spécifiques des tests
+- `tests/logs/test_summary_*.log` : Résumés d'exécution des tests
+
+### 🔄 Maintenance périodique de la base de données ✨
+
+#### Mise à jour automatisée des données
+
+Le système inclut désormais `utils/update_all_database.py` pour maintenir la base de données synchronisée avec Stack Overflow :
+
+```bash
+# Mise à jour quotidienne recommandée
+python utils/update_all_database.py --delay 0.2  # Plus respectueux de l'API
+
+# Test de la mise à jour sans modification
+python utils/update_all_database.py --dry-run
+
+# Mise à jour limitée pour tests
+python utils/update_all_database.py --max-questions 100
+
+# Mise à jour avec batches plus petits (pour grosses bases)
+python utils/update_all_database.py --batch-size 50
+```
+
+**Recommandations de fréquence :**
+- **Bases actives** : Quotidiennement ou tous les 2 jours
+- **Bases archivées** : Hebdomadairement  
+- **Avant analyses importantes** : Toujours mettre à jour
+- **Après restauration** : Mise à jour immédiate recommandée
+
+**Avantages de la maintenance régulière :**
+- 📊 **Scores à jour** : Votes et réponses récentes synchronisés
+- 🔍 **Métriques précises** : Analyses basées sur données actuelles  
+- 📈 **Tendances réelles** : Détection des évolutions de popularité
+- 🎯 **Qualité des rapports** : Recommandations basées sur données fraîches
 
 ### 🚨 Problèmes de performance
 

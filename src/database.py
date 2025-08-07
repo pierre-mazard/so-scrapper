@@ -132,12 +132,13 @@ class DatabaseManager:
         except Exception as e:
             self.logger.error(f"Erreur lors de la configuration des index: {e}")
     
-    async def store_questions(self, questions: List[QuestionData]) -> Dict[str, int]:
+    async def store_questions(self, questions: List[QuestionData], update_only: bool = False) -> Dict[str, int]:
         """
         Stocke une liste de questions en base de données.
         
         Args:
             questions: Liste des questions à stocker
+            update_only: Si True, met à jour seulement (pas d'upsert)
             
         Returns:
             Dict contenant les statistiques de stockage:
@@ -149,7 +150,8 @@ class DatabaseManager:
             self.logger.warning("Aucune question à stocker")
             return {'questions_stored': 0, 'authors_new': 0, 'authors_updated': 0}
 
-        self.logger.info(f"[STORE] Début du stockage de {len(questions)} questions...")
+        mode_text = "mise à jour uniquement" if update_only else "stockage (upsert)"
+        self.logger.info(f"[STORE] Début du {mode_text} de {len(questions)} questions...")
         
         questions_coll = self.motor_database[self.questions_collection]
         authors_coll = self.motor_database[self.authors_collection]
@@ -169,21 +171,30 @@ class DatabaseManager:
                 # Préparation des données question
                 question_doc = self._prepare_question_document(question)
                 
-                # Stockage de la question (avec upsert)
-                await questions_coll.update_one(
-                    {"question_id": question.question_id},
-                    {"$set": question_doc},
-                    upsert=True
-                )
+                # Stockage de la question (avec ou sans upsert selon le mode)
+                if update_only:
+                    # Mode update only : ne met à jour que si la question existe déjà
+                    result = await questions_coll.update_one(
+                        {"question_id": question.question_id},
+                        {"$set": question_doc}
+                    )
+                    if result.matched_count > 0:
+                        stored_count += 1
+                else:
+                    # Mode upsert : insert si nouveau, update si existant
+                    await questions_coll.update_one(
+                        {"question_id": question.question_id},
+                        {"$set": question_doc},
+                        upsert=True
+                    )
+                    stored_count += 1
                 
                 # Stockage/mise à jour de l'auteur avec tracking
-                author_status = await self._store_author(authors_coll, question)
+                author_status = await self._store_author(authors_coll, question, update_only)
                 if author_status == 'new':
                     authors_new += 1
                 elif author_status == 'updated':
                     authors_updated += 1
-                
-                stored_count += 1
                 
             except DuplicateKeyError:
                 self.logger.debug(f"Question {question.question_id} déjà existante")
@@ -212,9 +223,14 @@ class DatabaseManager:
         
         return doc
     
-    async def _store_author(self, authors_coll, question: QuestionData) -> str:
+    async def _store_author(self, authors_coll, question: QuestionData, update_only: bool = False) -> str:
         """
         Stocke ou met à jour les informations d'un auteur.
+        
+        Args:
+            authors_coll: Collection des auteurs
+            question: Données de la question contenant les infos d'auteur
+            update_only: Si True, met à jour seulement les auteurs existants
         
         Returns:
             str: 'new' si nouvel auteur, 'updated' si mis à jour, 'skipped' si ignoré
@@ -222,34 +238,54 @@ class DatabaseManager:
         if not question.author_name or question.author_name == "Unknown":
             return 'skipped'
         
-        author_doc = {
-            "author_name": question.author_name,
-            "reputation": question.author_reputation,
-            "profile_url": question.author_profile_url,
-            "last_seen": datetime.utcnow(),
-            "question_count": 1
-        }
-        
-        # Upsert avec mise à jour des statistiques
-        result = await authors_coll.update_one(
-            {"author_name": question.author_name},
-            {
-                "$set": {
-                    "reputation": question.author_reputation,
-                    "profile_url": question.author_profile_url,
-                    "last_seen": datetime.utcnow()
-                },
-                "$inc": {"question_count": 1},
-                "$setOnInsert": {"first_seen": datetime.utcnow()}
-            },
-            upsert=True
-        )
-        
-        # Déterminer si c'est un nouvel auteur ou une mise à jour
-        if result.upserted_id:
-            return 'new'
+        if update_only:
+            # Mode update only : ne met à jour que les auteurs existants
+            result = await authors_coll.update_one(
+                {"author_name": question.author_name},
+                {
+                    "$set": {
+                        "reputation": question.author_reputation,
+                        "profile_url": question.author_profile_url,
+                        "last_seen": datetime.utcnow()
+                    },
+                    "$inc": {"question_count": 1}
+                }
+            )
+            
+            if result.matched_count > 0:
+                return 'updated'
+            else:
+                return 'skipped'  # Auteur n'existe pas, on ne l'ajoute pas
         else:
-            return 'updated'
+            # Mode upsert : insert si nouveau, update si existant
+            author_doc = {
+                "author_name": question.author_name,
+                "reputation": question.author_reputation,
+                "profile_url": question.author_profile_url,
+                "last_seen": datetime.utcnow(),
+                "question_count": 1
+            }
+            
+            # Upsert avec mise à jour des statistiques
+            result = await authors_coll.update_one(
+                {"author_name": question.author_name},
+                {
+                    "$set": {
+                        "reputation": question.author_reputation,
+                        "profile_url": question.author_profile_url,
+                        "last_seen": datetime.utcnow()
+                    },
+                    "$inc": {"question_count": 1},
+                    "$setOnInsert": {"first_seen": datetime.utcnow()}
+                },
+                upsert=True
+            )
+            
+            # Déterminer si c'est un nouvel auteur ou une mise à jour
+            if result.upserted_id:
+                return 'new'
+            else:
+                return 'updated'
     
     async def get_questions(
         self,

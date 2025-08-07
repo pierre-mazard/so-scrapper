@@ -186,7 +186,7 @@ class TestEndToEndPipeline:
                 tags=['python', 'javascript'],
                 use_api=False,
                 analyze_data=True,
-                storage_mode='update',
+                storage_mode='upsert',  # Mode par défaut
                 analysis_scope='all'
             )
             

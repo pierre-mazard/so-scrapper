@@ -825,7 +825,10 @@ class DataAnalyzer:
             if exec_info.get('storage_mode') == 'append-only':
                 options.append("--mode append-only")
             elif exec_info.get('storage_mode') == 'update':
-                options.append("--mode update (défaut)")
+                options.append("--mode update")
+            elif exec_info.get('storage_mode') == 'upsert':
+                # upsert est maintenant le défaut, on ne l'affiche que si explicitement spécifié
+                pass  # Mode par défaut, pas besoin de l'ajouter
             
             if exec_info.get('analysis_scope') == 'new-only':
                 options.append("--analysis-scope new-only")
@@ -890,13 +893,36 @@ class DataAnalyzer:
         
         if 'execution_info' in results:
             exec_info = results['execution_info']
+            storage_mode = exec_info.get('storage_mode', 'N/A')
+            
             f.write("### Opérations de stockage\n\n")
-            f.write(f"- **Questions stockées**: {exec_info.get('questions_stored', 'N/A')}\n")
+            
+            # Informations détaillées sur les questions selon le mode
+            questions_attempted = exec_info.get('questions_attempted', 0)
+            questions_stored = exec_info.get('questions_stored', 0)
+            new_questions_count = exec_info.get('new_questions_count', 0)
+            
+            f.write(f"- **Mode de stockage utilisé**: {storage_mode}\n")
+            f.write(f"- **Questions extraites**: {questions_attempted}\n")
+            f.write(f"- **Questions stockées**: {questions_stored}\n")
+            
+            # Détails spécifiques selon le mode de stockage
+            if storage_mode == 'upsert':
+                f.write(f"- **Questions nouvelles/mises à jour**: {questions_stored} (insertion + mise à jour)\n")
+            elif storage_mode == 'update':
+                questions_ignored = questions_attempted - questions_stored
+                f.write(f"- **Questions mises à jour**: {questions_stored}\n")
+                f.write(f"- **Questions nouvelles ignorées**: {questions_ignored}\n")
+            elif storage_mode == 'append-only':
+                questions_ignored = questions_attempted - questions_stored
+                f.write(f"- **Questions nouvelles ajoutées**: {questions_stored}\n")
+                f.write(f"- **Questions doublons ignorées**: {questions_ignored}\n")
             
             # Statistiques détaillées des auteurs
             authors_new = exec_info.get('authors_new', 0)
             authors_updated = exec_info.get('authors_updated', 0)
             
+            f.write("\n#### Gestion des auteurs\n\n")
             if authors_new > 0 or authors_updated > 0:
                 f.write(f"- **Nouveaux auteurs**: {authors_new}\n")
                 f.write(f"- **Auteurs mis à jour**: {authors_updated}\n")
@@ -904,8 +930,18 @@ class DataAnalyzer:
             else:
                 f.write("- **Auteurs**: Aucun changement\n")
             
+            # Métriques de performance
+            f.write("\n#### Performance de stockage\n\n")
             if 'storage_rate' in exec_info:
-                f.write(f"- **Taux de stockage**: {exec_info['storage_rate']:.1f} questions/sec\n")
+                f.write(f"- **Taux de stockage**: {exec_info['storage_rate']:.1f} opérations/sec\n")
+            if 'storage_duration' in exec_info:
+                f.write(f"- **Durée de stockage**: {exec_info['storage_duration']:.2f} secondes\n")
+            
+            # Efficacité du stockage
+            if questions_attempted > 0:
+                efficiency = (questions_stored / questions_attempted) * 100
+                f.write(f"- **Efficacité**: {efficiency:.1f}% des questions extraites stockées\n")
+            
             f.write("\n")
     
     def _write_analysis_info(self, f, results: Dict[str, Any]) -> None:
