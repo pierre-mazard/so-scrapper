@@ -452,7 +452,7 @@ class DataAnalyzer:
                 questions = await self.db_manager.get_questions_by_ids(question_ids)
             else:
                 self.logger.info("Questions extraites: Récupération des données depuis la base...")
-                questions = await self.db_manager.get_questions()  # Pas de limite = toutes les questions
+                questions = await self.db_manager.get_questions(limit=None)  # Toutes les questions
             
             if not questions:
                 self.logger.warning("⚠️ Aucune question trouvée pour l'analyse")
@@ -488,7 +488,7 @@ class DataAnalyzer:
             
             # 4. Analyse des auteurs
             self.logger.info("[AUTHORS] Étape 4/5: Analyse des auteurs...")
-            results['author_analysis'] = await self._analyze_authors()
+            results['author_analysis'] = await self._analyze_authors(question_ids)
             self.logger.info("[OK] Analyse des auteurs terminée")
             
             # 5. Statistiques générales
@@ -575,9 +575,19 @@ class DataAnalyzer:
             }
         }
     
-    async def _analyze_authors(self) -> Dict[str, Any]:
-        """Analyse les données des auteurs."""
-        authors = await self.db_manager.get_top_authors(limit=100)
+    async def _analyze_authors(self, question_ids: Optional[List[int]] = None) -> Dict[str, Any]:
+        """
+        Analyse les données des auteurs.
+        
+        Args:
+            question_ids: Si fourni, analyse uniquement les auteurs de ces questions
+        """
+        if question_ids:
+            # Analyser uniquement les auteurs des questions spécifiées
+            authors = await self.db_manager.get_authors_by_question_ids(question_ids)
+        else:
+            # Analyser tous les auteurs (sans limite)
+            authors = await self.db_manager.get_top_authors(limit=None)
         
         if not authors:
             return {}
@@ -882,7 +892,18 @@ class DataAnalyzer:
             exec_info = results['execution_info']
             f.write("### Opérations de stockage\n\n")
             f.write(f"- **Questions stockées**: {exec_info.get('questions_stored', 'N/A')}\n")
-            f.write(f"- **Auteurs stockés**: {exec_info.get('authors_stored', 'N/A')}\n")
+            
+            # Statistiques détaillées des auteurs
+            authors_new = exec_info.get('authors_new', 0)
+            authors_updated = exec_info.get('authors_updated', 0)
+            
+            if authors_new > 0 or authors_updated > 0:
+                f.write(f"- **Nouveaux auteurs**: {authors_new}\n")
+                f.write(f"- **Auteurs mis à jour**: {authors_updated}\n")
+                f.write(f"- **Total auteurs affectés**: {authors_new + authors_updated}\n")
+            else:
+                f.write("- **Auteurs**: Aucun changement\n")
+            
             if 'storage_rate' in exec_info:
                 f.write(f"- **Taux de stockage**: {exec_info['storage_rate']:.1f} questions/sec\n")
             f.write("\n")

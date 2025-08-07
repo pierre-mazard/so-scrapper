@@ -132,7 +132,7 @@ class DatabaseManager:
         except Exception as e:
             self.logger.error(f"Erreur lors de la configuration des index: {e}")
     
-    async def store_questions(self, questions: List[QuestionData]) -> int:
+    async def store_questions(self, questions: List[QuestionData]) -> Dict[str, int]:
         """
         Stocke une liste de questions en base de données.
         
@@ -140,18 +140,23 @@ class DatabaseManager:
             questions: Liste des questions à stocker
             
         Returns:
-            Nombre de questions stockées avec succès
+            Dict contenant les statistiques de stockage:
+            - questions_stored: nombre de questions stockées
+            - authors_new: nombre de nouveaux auteurs
+            - authors_updated: nombre d'auteurs mis à jour
         """
         if not questions:
             self.logger.warning("Aucune question à stocker")
-            return 0
-        
+            return {'questions_stored': 0, 'authors_new': 0, 'authors_updated': 0}
+
         self.logger.info(f"[STORE] Début du stockage de {len(questions)} questions...")
         
         questions_coll = self.motor_database[self.questions_collection]
         authors_coll = self.motor_database[self.authors_collection]
         
         stored_count = 0
+        authors_new = 0
+        authors_updated = 0
         progress_interval = max(1, len(questions) // 10)  # Log tous les 10%
         
         for i, question in enumerate(questions, 1):
@@ -171,8 +176,12 @@ class DatabaseManager:
                     upsert=True
                 )
                 
-                # Stockage/mise à jour de l'auteur
-                await self._store_author(authors_coll, question)
+                # Stockage/mise à jour de l'auteur avec tracking
+                author_status = await self._store_author(authors_coll, question)
+                if author_status == 'new':
+                    authors_new += 1
+                elif author_status == 'updated':
+                    authors_updated += 1
                 
                 stored_count += 1
                 
@@ -182,7 +191,12 @@ class DatabaseManager:
                 self.logger.error(f"❌ Erreur lors du stockage de la question {question.question_id}: {e}")
         
         self.logger.info(f"[OK] Stockage terminé: {stored_count}/{len(questions)} questions sauvegardées")
-        return stored_count
+        
+        return {
+            'questions_stored': stored_count,
+            'authors_new': authors_new,
+            'authors_updated': authors_updated
+        }
     
     def _prepare_question_document(self, question: QuestionData) -> Dict[str, Any]:
         """Prépare un document MongoDB à partir d'une QuestionData."""
@@ -198,10 +212,15 @@ class DatabaseManager:
         
         return doc
     
-    async def _store_author(self, authors_coll, question: QuestionData) -> None:
-        """Stocke ou met à jour les informations d'un auteur."""
+    async def _store_author(self, authors_coll, question: QuestionData) -> str:
+        """
+        Stocke ou met à jour les informations d'un auteur.
+        
+        Returns:
+            str: 'new' si nouvel auteur, 'updated' si mis à jour, 'skipped' si ignoré
+        """
         if not question.author_name or question.author_name == "Unknown":
-            return
+            return 'skipped'
         
         author_doc = {
             "author_name": question.author_name,
@@ -212,7 +231,7 @@ class DatabaseManager:
         }
         
         # Upsert avec mise à jour des statistiques
-        await authors_coll.update_one(
+        result = await authors_coll.update_one(
             {"author_name": question.author_name},
             {
                 "$set": {
@@ -225,10 +244,16 @@ class DatabaseManager:
             },
             upsert=True
         )
+        
+        # Déterminer si c'est un nouvel auteur ou une mise à jour
+        if result.upserted_id:
+            return 'new'
+        else:
+            return 'updated'
     
     async def get_questions(
         self,
-        limit: int = 100,
+        limit: Optional[int] = 100,
         skip: int = 0,
         filters: Optional[Dict[str, Any]] = None,
         sort_by: str = "publication_date"
@@ -237,7 +262,7 @@ class DatabaseManager:
         Récupère les questions de la base de données.
         
         Args:
-            limit: Nombre maximum de questions à récupérer
+            limit: Nombre maximum de questions à récupérer (None = toutes)
             skip: Nombre de questions à ignorer
             filters: Filtres à appliquer
             sort_by: Champ de tri
@@ -249,8 +274,13 @@ class DatabaseManager:
         
         query = filters or {}
         
-        cursor = questions_coll.find(query).sort(sort_by, -1).skip(skip).limit(limit)
-        questions = await cursor.to_list(length=limit)
+        cursor = questions_coll.find(query).sort(sort_by, -1).skip(skip)
+        
+        if limit is not None:
+            cursor = cursor.limit(limit)
+            questions = await cursor.to_list(length=limit)
+        else:
+            questions = await cursor.to_list(length=None)
         
         return questions
     
@@ -315,13 +345,55 @@ class DatabaseManager:
             limit=1000
         )
     
-    async def get_top_authors(self, limit: int = 10) -> List[Dict[str, Any]]:
+    async def get_top_authors(self, limit: Optional[int] = 10) -> List[Dict[str, Any]]:
         """Récupère les auteurs les plus actifs."""
         authors_coll = self.motor_database[self.authors_collection]
         
-        cursor = authors_coll.find().sort("question_count", -1).limit(limit)
-        authors = await cursor.to_list(length=limit)
+        cursor = authors_coll.find().sort("question_count", -1)
+        if limit is not None:
+            cursor = cursor.limit(limit)
+            authors = await cursor.to_list(length=limit)
+        else:
+            authors = await cursor.to_list(length=None)
         
+        return authors
+
+    async def get_authors_by_question_ids(self, question_ids: List[int]) -> List[Dict[str, Any]]:
+        """
+        Récupère les auteurs correspondant aux questions spécifiées.
+        
+        Args:
+            question_ids: Liste des IDs des questions
+            
+        Returns:
+            Liste des auteurs uniques de ces questions
+        """
+        if not question_ids:
+            return []
+            
+        questions_coll = self.motor_database[self.questions_collection]
+        
+        # Récupérer les noms d'auteurs uniques des questions spécifiées
+        pipeline = [
+            {"$match": {"question_id": {"$in": question_ids}}},
+            {"$group": {"_id": "$author_name"}},
+            {"$match": {"_id": {"$ne": None, "$ne": "Unknown"}}}
+        ]
+        
+        cursor = questions_coll.aggregate(pipeline)
+        author_names_docs = await cursor.to_list(length=None)
+        author_names = [doc["_id"] for doc in author_names_docs]
+        
+        if not author_names:
+            return []
+            
+        # Récupérer les détails des auteurs
+        authors_coll = self.motor_database[self.authors_collection]
+        cursor = authors_coll.find(
+            {"author_name": {"$in": author_names}}
+        ).sort("question_count", -1)
+        
+        authors = await cursor.to_list(length=None)
         return authors
     
     async def get_tag_statistics(self) -> List[Dict[str, Any]]:

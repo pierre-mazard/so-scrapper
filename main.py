@@ -17,7 +17,7 @@ import argparse
 import asyncio
 import logging
 from datetime import datetime
-from typing import Optional, List
+from typing import Optional, List, Dict
 
 from src.scraper import StackOverflowScraper, QuestionData
 from src.database import DatabaseManager
@@ -25,7 +25,7 @@ from src.analyzer import DataAnalyzer
 from src.config import Config
 
 
-async def store_questions_append_only(db_manager: DatabaseManager, questions_data: List[QuestionData], logger) -> int:
+async def store_questions_append_only(db_manager: DatabaseManager, questions_data: List[QuestionData], logger) -> Dict[str, int]:
     """
     Stocke les questions en mode 'append-only' : ignore complètement les doublons.
     
@@ -35,7 +35,7 @@ async def store_questions_append_only(db_manager: DatabaseManager, questions_dat
         logger: Logger pour les messages
         
     Returns:
-        Nombre de nouvelles questions stockées
+        Dict avec les statistiques de stockage
     """
     logger.info("🔍 Mode APPEND-ONLY : Filtrage des questions existantes...")
     
@@ -62,7 +62,7 @@ async def store_questions_append_only(db_manager: DatabaseManager, questions_dat
         return await db_manager.store_questions(new_questions)
     else:
         logger.info("ℹ️  Aucune nouvelle question à stocker")
-        return 0
+        return {'questions_stored': 0, 'authors_new': 0, 'authors_updated': 0}
 
 
 def setup_logging(log_level: str = "INFO") -> None:
@@ -188,7 +188,10 @@ async def main(
         
         if storage_mode == "update":
             # Mode par défaut : mise à jour/ajout (upsert)
-            stored_count = await db_manager.store_questions(questions_data)
+            storage_result = await db_manager.store_questions(questions_data)
+            stored_count = storage_result['questions_stored']
+            authors_new = storage_result['authors_new']
+            authors_updated = storage_result['authors_updated']
             # En mode update, on considère toutes les questions comme "nouvelles" pour l'analyse
             new_questions_ids = [q.question_id for q in questions_data]
             
@@ -198,7 +201,10 @@ async def main(
             existing_ids = await db_manager.get_question_ids()
             before_count = len(existing_ids)
             
-            stored_count = await store_questions_append_only(db_manager, questions_data, logger)
+            storage_result = await store_questions_append_only(db_manager, questions_data, logger)
+            stored_count = storage_result['questions_stored']
+            authors_new = storage_result['authors_new']
+            authors_updated = storage_result['authors_updated']
             
             # Identifier les nouvelles questions (celles qui ont été réellement ajoutées)
             new_questions_ids = [q.question_id for q in questions_data if q.question_id not in existing_ids]
@@ -210,11 +216,21 @@ async def main(
         
         storage_time = datetime.now() - storage_start
         
+        # Log des détails d'auteurs 
+        if authors_new > 0:
+            logger.info(f"👥 Nouveaux auteurs ajoutés: {authors_new}")
+        if authors_updated > 0:
+            logger.info(f"🔄 Auteurs mis à jour: {authors_updated}")
+        if authors_new == 0 and authors_updated == 0 and stored_count == 0:
+            logger.info("ℹ️  Aucun auteur ajouté ou mis à jour")
+        
         execution_info.update({
             'storage_duration': storage_time.total_seconds(),
             'questions_stored': stored_count,
             'questions_attempted': len(questions_data),
-            'authors_stored': len(unique_authors),
+            'authors_new': authors_new,
+            'authors_updated': authors_updated,
+            'authors_total_affected': authors_new + authors_updated,
             'storage_rate': stored_count / storage_time.total_seconds() if storage_time.total_seconds() > 0 else 0,
             'storage_status': '✅ Terminé',
             'storage_mode': storage_mode
