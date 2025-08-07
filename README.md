@@ -482,9 +482,9 @@ so-scrapper/
 │   ├── test_config.py         # Tests configuration (20 tests)
 │   ├── test_database.py       # Tests MongoDB (16 tests)
 │   ├── test_scraper.py        # Tests extraction (12 tests)
-│   ├── test_main.py           # Tests pipeline principal (17 tests)
-│   ├── test_utils.py          # Tests utilitaires (13 tests)
-│   ├── test_pipeline_e2e.py   # Tests end-to-end (7 tests)
+│   ├── test_main.py           # Tests pipeline principal ✨ (17 tests)
+│   ├── test_utils.py          # Tests utilitaires ✨ (13 tests)
+│   ├── test_pipeline_e2e.py   # Tests end-to-end ✨ (7 tests)
 │   ├── test_logger.py         # Système de logging des tests
 │   ├── analyze_logs.py        # Analyseur de logs de tests
 │   └── logs/                  # Logs détaillés avec historique
@@ -716,12 +716,7 @@ python main.py --mode update --analysis-scope all
 
 # Mode économe : collecte sans analyse immédiate
 python main.py --use-api -n 2000 --no-analysis
-# → Génère quand même un rapport d'exécution avec statut "Analyse désactivée" 
-
-# Cas d'analyse annulée automatiquement
-python main.py --mode append-only --analysis-scope new-only -n 100
-# → Si aucune nouvelle question, l'analyse est annulée intelligemment
-# → Le rapport indique "Analyse annulée - Aucune nouvelle question"
+```
 
 #### 7. Workflows spécialisés
 ```bash
@@ -735,7 +730,7 @@ python main.py --use-api -n 500 --mode update
 python main.py -t "machine-learning" "artificial-intelligence" --use-api
 ```
 
-## �️ Base de données
+## 🗄️ Base de données
 
 ### Architecture MongoDB
 
@@ -1586,8 +1581,9 @@ python main.py -n 50 --use-api --mode append-only
 
 En cas de problème persistant :
 
-1. **Vérifiez les logs** : `logs/scraper.log`
+1. **Vérifiez les logs** : `logs/scraper.log` et `tests/logs/`
 2. **Exécutez le diagnostic** : `python utils/check_mongodb.py`
 3. **Testez en mode minimal** : `python main.py -n 10 --log-level DEBUG`
+4. **Consultez les issues GitHub** du projet
 
 ---
